@@ -3,41 +3,22 @@
 
 packer {
   required_plugins {
-    scaffolding = {
-      version = ">=v0.1.0"
-      source  = "github.com/hashicorp/scaffolding"
+    zstack = {
+      version = "v0.0.1"
+      source  = "github.com/zstackio/zstack"
     }
   }
 }
 
-source "scaffolding-my-builder" "foo-example" {
-  mock = local.foo
-}
-
-source "scaffolding-my-builder" "bar-example" {
-  mock = local.bar
+source "zstack" "test" {
+  host              = "172.30.3.3"
+  port              = 8080
+  account_name      = "admin"
+  account_password  = "password"
+  access_key_id     = "uxPnrlvM0RK7H53os1Gn"
+  access_key_secret = "1UQ3bfz9qS4vG9CmKLtqeNISwOMai1aByPElOBjN"
 }
 
 build {
-  sources = [
-    "source.scaffolding-my-builder.foo-example",
-  ]
-
-  source "source.scaffolding-my-builder.bar-example" {
-    name = "bar"
-  }
-
-  provisioner "scaffolding-my-provisioner" {
-    only = ["scaffolding-my-builder.foo-example"]
-    mock = "foo: ${local.foo}"
-  }
-
-  provisioner "scaffolding-my-provisioner" {
-    only = ["scaffolding-my-builder.bar"]
-    mock = "bar: ${local.bar}"
-  }
-
-  post-processor "scaffolding-my-post-processor" {
-    mock = "post-processor mock-config"
-  }
+  sources = ["source.zstack.test"]
 }
