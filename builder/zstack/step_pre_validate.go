@@ -17,15 +17,6 @@ func (s *StepPreValidate) Run(ctx context.Context, state multistep.StateBag) mul
 	config := state.Get("config").(*Config)
 	ui.Say("Validating configuration...")
 
-	images, err := validateImage(state)
-	if err != nil || images[0].Status != "Ready" || images[0].State != "Enabled" {
-		ui.Errorf("Image validation failed: %s", err)
-		return multistep.ActionHalt
-	}
-
-	config.ImageConfig.ImageUuid = images[0].UUID
-	ui.Say("Source Image validated")
-
 	networks, err := validateNetwork(state)
 	if err != nil {
 		ui.Errorf("Network validation failed: %s", err)
@@ -49,30 +40,13 @@ func (s *StepPreValidate) Run(ctx context.Context, state multistep.StateBag) mul
 		ui.Errorf("image storage validation failed: ", err)
 		return multistep.ActionHalt
 	}
-	//state.Put("backup_storage_uuid", backupStoarges[0].UUID)
+
 	config.BackupStorageConfig.BackupStorageUuid = backupStoarges[0].UUID
-	//state.Put("config", &config)
 	ui.Say("image storage validated")
 
 	state.Put("config", config)
 
 	return multistep.ActionContinue
-}
-
-func validateImage(state multistep.StateBag) ([]view.ImageView, error) {
-	config := state.Get("config").(*Config)
-	driver := state.Get("driver").(Driver)
-
-	images, err := driver.QueryImage(config.SourceImage)
-	if err != nil {
-		return nil, fmt.Errorf("error querying image: %s", err)
-	}
-
-	if images == nil {
-		return nil, fmt.Errorf("image not found")
-	}
-
-	return images, nil
 }
 
 func validateNetwork(state multistep.StateBag) ([]view.L3NetworkInventoryView, error) {

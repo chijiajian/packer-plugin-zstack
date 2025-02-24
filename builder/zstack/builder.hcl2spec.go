@@ -18,6 +18,11 @@ type FlatConfig struct {
 	ImageUuid      *string `mapstructure:"image_uuid" cty:"image_uuid" hcl:"image_uuid"`
 	RootVolumeUuid *string `mapstructure:"root_volume_uuid" cty:"root_volume_uuid" hcl:"root_volume_uuid"`
 	ImageUrl       *string `mapstructure:"image_url" cty:"image_url" hcl:"image_url"`
+	GuestOsType    *string `mapstructure:"guest_os_type" cty:"guest_os_type" hcl:"guest_os_type"`
+	SourceImageUrl *string `mapstructure:"source_image_url" cty:"source_image_url" hcl:"source_image_url"`
+	Format         *string `mapstructure:"format" cty:"format" hcl:"format"`
+	//BackupStorageUuids *[]string `mapstructure:"backup_storage_uuids" cty:"backup_storage_uuids" hcl:"backup_storage_uuids"`
+	Platform *string `mapstructure:"platform" cty:"platform" hcl:"platform"`
 
 	L3NetworkUuid *string `mapstructure:"network_uuid" cty:"network_uuid" hcl:"network_uuid"`
 	L3NetworkName *string `mapstructure:"network_name" cty:"network_name" hcl:"network_name"`
@@ -59,6 +64,11 @@ func (*FlatConfig) HCL2Spec() map[string]hcldec.Spec {
 		"image_uuid":       &hcldec.AttrSpec{Name: "image_uuid", Type: cty.String, Required: false},
 		"root_volume_uuid": &hcldec.AttrSpec{Name: "root_volume_uuid", Type: cty.String, Required: false},
 		"image_url":        &hcldec.AttrSpec{Name: "image_url", Type: cty.String, Required: false},
+		"guest_os_type":    &hcldec.AttrSpec{Name: "guest_os_type", Type: cty.String, Required: false},
+		"source_image_url": &hcldec.AttrSpec{Name: "source_image_url", Type: cty.String, Required: false},
+		"format":           &hcldec.AttrSpec{Name: "format", Type: cty.String, Required: false},
+		//"backup_storage_uuids": &hcldec.AttrSpec{Name: "format", Type: cty.String, Required: false},
+		"platform": &hcldec.AttrSpec{Name: "platform", Type: cty.String, Required: false},
 
 		"network_uuid": &hcldec.AttrSpec{Name: "network_uuid", Type: cty.String, Required: false},
 		"network_name": &hcldec.AttrSpec{Name: "network_name", Type: cty.String, Required: false},

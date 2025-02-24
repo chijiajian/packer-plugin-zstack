@@ -2,6 +2,7 @@ package zstack
 
 import (
 	"errors"
+	"log"
 	"os"
 
 	"github.com/hashicorp/packer-plugin-sdk/common"
@@ -17,26 +18,24 @@ type Config struct {
 	Comm                   communicator.Config `mapstructure:",squash"`
 	AccessConfig           `mapstructure:",squash"`
 
-	//	DataVolumeConfig    `mapstructure:",squash"`
 	ImageConfig    `mapstructure:",squash"`
 	NetworkConfig  `mapstructure:",squash"`
 	InstanceConfig `mapstructure:",squash"`
-	//ZoneConfig          `mapstructure:",squash"`
+
 	BackupStorageConfig `mapstructure:",squash"`
 	ExportImageResult   `mapstructure:",squash"`
 	DebugMode           string `mapstructure:"debug_mode"`
 }
 
 type ImageConfig struct {
-	ImageName   string `mapstructure:"image_name"`
-	SourceImage string `mapstructure:"source_image"`
-	//	GuestOsType        string   `mapstructure:"guest_os_type"`
-	//	Url                string   `mapstructure:"url"`
-	//	Format             string   `mapstructure:"format"`
-	//	BackupStorageUuids []string `mapstructure:"backup_storage_uuids"`
-	ImageUuid string `mapstructure:"image_uuid"`
-
-	// Platform           string   `mapstructure:"platform"`
+	ImageName          string   `mapstructure:"image_name"`
+	SourceImage        string   `mapstructure:"source_image"`
+	GuestOsType        string   `mapstructure:"guest_os_type"`
+	SourceImageUrl     string   `mapstructure:"source_image_url"`
+	Format             string   `mapstructure:"format"`
+	BackupStorageUuids []string `mapstructure:"backup_storage_uuids"`
+	ImageUuid          string   `mapstructure:"image_uuid"`
+	Platform           string   `mapstructure:"platform"`
 }
 
 type NetworkConfig struct {
@@ -67,41 +66,13 @@ type ExportImageResult struct {
 	Success  bool   `mapstructure:"export_image_result"`
 }
 
-/*
-	type ExportImageFromBackupStorageResultView struct {
-	    ImageUrl     string `json:"imageUrl"`     //导出的镜像的URL
-	    ExportMd5Sum string `json:"exportMd5Sum"` //导出的镜像的MD5值
-	    Success      bool   `json:"success"`      //导出是否成功
-	    Error        string `json:"error"`        //导出失败的错误信息
-	}
-
-	type DataVolumeConfig struct {
-		Name               string `mapstructure:"name"`
-		DiskSize           int64  `mapstructure:"disk_size"`
-		DiskOfferingUuid   string `mapstructure:"disk_offering_uuid"`
-		PrimaryStorageUuid string `mapstructure:"primary_storage_uuid"`
-	}
-
-	type ImageConfig struct {
-		ImageName          string   `mapstructure:"image_name"`
-		GuestOsType        string   `mapstructure:"guest_os_type"`
-		Url                string   `mapstructure:"url"`
-		Format             string   `mapstructure:"format"`
-		BackupStorageUuids []string `mapstructure:"backup_storage_uuids"`
-		ImageUuid          string   `mapstructure:"image_uuid"`
-		Platform           string   `mapstructure:"platform"`
-	}
-
-	type ZoneConfig struct {
-		ZoneUuid string `mapstructure:"zone_uuid"`
-	}
-*/
 func (c *Config) Prepare(raws ...interface{}) error {
 	err := config.Decode(c, &config.DecodeOpts{
 		Interpolate:        true,
 		InterpolateContext: &c.ctx,
 	}, raws...)
 	if err != nil {
+		log.Printf("[ERROR] Failed to decode configuration: %v", err)
 		return err
 	}
 
@@ -128,16 +99,30 @@ func (c *Config) Prepare(raws ...interface{}) error {
 	}
 
 	if c.Host == "" {
-		errs = packersdk.MultiErrorAppend(errs, errors.New("a host of cloud mn ip must be sepcified"))
+		errs = packersdk.MultiErrorAppend(errs, errors.New("host must be specified"))
 	}
-	/*
-		if c.ZoneUuid == "" {
-			errs = packersdk.MultiErrorAppend(errs, errors.New("a zone uuid must be sepcified"))
+
+	if c.SourceImageUrl != "" {
+		log.Printf("[INFO] Configuring source image from URL: %s", c.SourceImageUrl)
+		if c.Format == "" {
+			log.Printf("[DEBUG] Setting default image format to qcow2")
+			c.Format = "qcow2"
 		}
-	*/
+		if c.Platform == "" {
+			log.Printf("[DEBUG] Setting default platform to Linux")
+			c.Platform = "Linux"
+		}
+		if c.SourceImage == "" {
+			errs = packersdk.MultiErrorAppend(errs, errors.New("source image name must be sepcified"))
+		}
+	}
+
 	if errs != nil && len(errs.Errors) > 0 {
+		log.Printf("[ERROR] Configuration validation failed: %v", errs)
 		return errs
 	}
+
+	log.Printf("[INFO] Configuration prepared successfully")
 	return nil
 
 }

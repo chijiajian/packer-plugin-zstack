@@ -1,13 +1,15 @@
 package zstack
 
 import (
+	"fmt"
+	"log"
+
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
 	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
 	"golang.org/x/net/context"
 )
 
 type StepAttachGuestTools struct {
-	// vm *param.CreateVmInstanceParam
 }
 
 func (s *StepAttachGuestTools) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {
@@ -16,16 +18,25 @@ func (s *StepAttachGuestTools) Run(ctx context.Context, state multistep.StateBag
 	driver := state.Get("driver").(Driver)
 
 	instanceUuid := config.InstanceUuid
-
-	vms, _ := driver.GetVmInstance(instanceUuid)
-	ui.Say("start attach guest tools..." + instanceUuid + vms.Name)
-
-	err := driver.AttachGuestToolsToVm(instanceUuid)
-	if err != nil {
-		ui.Say("failt to attach guest tools")
+	if instanceUuid == "" {
+		err := fmt.Errorf("instance UUID is required but not provided")
+		ui.Error(err.Error())
+		log.Printf("[ERROR] %v", err)
 		return multistep.ActionHalt
 	}
-	ui.Say("attach tools to " + instanceUuid)
+	log.Printf("[INFO] Starting guest tools attachment for VM: %s", instanceUuid)
+	ui.Say("Starting guest tools attachment process...")
+
+	vm, _ := driver.GetVmInstance(instanceUuid)
+	err := driver.AttachGuestToolsToVm(instanceUuid)
+	if err != nil {
+		ui.Error(fmt.Sprintf("Failed to attach guest tools: %s", err))
+		log.Printf("[ERROR] Failed to attach guest tools to VM %s: %v", instanceUuid, err)
+		return multistep.ActionHalt
+	}
+	log.Printf("[INFO] Successfully attached guest tools to VM %s", instanceUuid)
+	ui.Say(fmt.Sprintf("Successfully attached guest tools to VM '%s'", vm.Name))
+
 	return multistep.ActionContinue
 }
 

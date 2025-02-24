@@ -1,13 +1,11 @@
-// Copyright (c) HashiCorp, Inc.
-// SPDX-License-Identifier: MPL-2.0
-
 package zstack
+
+import "fmt"
 
 // packersdk.Artifact implementation
 type Artifact struct {
-	// StateData should store data such as GeneratedData
-	// to be shared with post-processors
-	StateData map[string]interface{}
+	config    Config
+	exportUrl []string
 }
 
 func (*Artifact) BuilderId() string {
@@ -15,19 +13,24 @@ func (*Artifact) BuilderId() string {
 }
 
 func (a *Artifact) Files() []string {
-	return []string{}
+	if len(a.exportUrl) > 0 {
+		return a.exportUrl
+	} else {
+		return []string{}
+	}
+
 }
 
-func (*Artifact) Id() string {
-	return ""
+func (a *Artifact) Id() string {
+	return a.config.ImageUuid
 }
 
 func (a *Artifact) String() string {
-	return ""
+	return a.config.ImageUrl
 }
 
 func (a *Artifact) State(name string) interface{} {
-	return a.StateData[name]
+	return fmt.Sprintf("State: name - %s", name)
 }
 
 func (a *Artifact) Destroy() error {

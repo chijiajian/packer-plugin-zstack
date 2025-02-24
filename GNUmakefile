@@ -1,4 +1,4 @@
-NAME=scaffolding
+NAME=zstack
 BINARY=packer-plugin-${NAME}
 
 COUNT?=1

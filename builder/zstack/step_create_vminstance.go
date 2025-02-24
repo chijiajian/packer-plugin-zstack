@@ -19,9 +19,9 @@ func (s *StepCreateVMInstance) Run(ctx context.Context, state multistep.StateBag
 	ui := state.Get("ui").(packersdk.Ui)
 	config := state.Get("config").(*Config)
 	driver := state.Get("driver").(Driver)
-	//	ui.Say("Create vm instance...image uuid: " + config.ImageUuid + " ... " + config.L3NetworkUuid + " ... " + config.InstanceOfferingUuid)
 
-	ui.Say("Get from state image uuid1 ... ")
+	ui.Say(fmt.Sprintf("Creating VM instance '%s'...", config.InstanceName))
+
 	var systemtags []string
 	systemtags = addSystemTags(systemtags, "cdroms::Empty::None::None", "cleanTraffic::false")
 	if config.SshKey != "" {
@@ -39,8 +39,6 @@ func (s *StepCreateVMInstance) Run(ctx context.Context, state multistep.StateBag
 		log.Printf("[DEBUG] userdata: %s", userData)
 		systemtags = addSystemTags(systemtags, fmt.Sprintf("userdata::%s", userData))
 	}
-
-	ui.Message(config.ImageUuid + " " + config.InstanceOfferingUuid + " " + config.L3NetworkUuid)
 
 	createVmInstanceParam := param.CreateVmInstanceParam{
 		BaseParam: param.BaseParam{
@@ -63,34 +61,46 @@ func (s *StepCreateVMInstance) Run(ctx context.Context, state multistep.StateBag
 	if err != nil {
 
 	}
-	ui.Say("vm instance has been created")
-	ui.Message(fmt.Sprintf("Instance UUID: %s", instance.UUID))
 
 	config.InstanceUuid = instance.UUID
 	config.RootVolumeUuid = instance.RootVolumeUUID
 	config.IP = instance.VMNics[0].IP
 
 	state.Put("config", config)
+	log.Printf("[INFO] Successfully created VM instance (UUID: %s, IP: %s)", instance.UUID, config.IP)
+	ui.Say(fmt.Sprintf("Successfully created VM instance '%s' (UUID: %s, IP: %s)",
+		config.InstanceName, instance.UUID, config.IP))
 
 	return multistep.ActionContinue
 }
 
 func (s *StepCreateVMInstance) Cleanup(state multistep.StateBag) {
-	ui := state.Get("ui").(packersdk.Ui)
-	config := state.Get("config").(*Config)
-	driver := state.Get("driver").(Driver)
+	/*
+		ui := state.Get("ui").(packersdk.Ui)
+		config := state.Get("config").(*Config)
+		driver := state.Get("driver").(Driver)
 
-	if state.Get("debug_mode").(bool) {
-		return
-	}
-	if config.InstanceUuid == "" {
-		return
-	}
+		if state.Get("debug_mode").(bool) {
+			log.Printf("[INFO] Keeping instance due to keep_instance_on_failure setting")
+			return
+		}
+		if config.InstanceUuid != "" {
+			ui.Say("Cleaning up VM instance...")
+			if err := driver.DeleteVmInstance(config.InstanceUuid); err != nil {
+				ui.Error(fmt.Sprintf("Error cleaning up VM instance: %s", err))
+				log.Printf("[ERROR] Failed to cleanup VM instance: %v", err)
+			}
+			config.InstanceUuid = ""
+			return
+		}
 
-	ui.Say("Cleaning up VM instance...")
-	if err := driver.DeleteVmInstance(config.InstanceUuid); err != nil {
-		ui.Error(fmt.Sprintf("Error cleaning up VM instance: %s", err))
-	}
-	config.InstanceUuid = ""
-	state.Remove("config")
+
+			ui.Say("Cleaning up VM instance...")
+			if err := driver.DeleteVmInstance(config.InstanceUuid); err != nil {
+				ui.Error(fmt.Sprintf("Error cleaning up VM instance: %s", err))
+			}
+			config.InstanceUuid = ""
+			state.Remove("config")
+	*/
+
 }

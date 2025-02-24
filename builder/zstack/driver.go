@@ -30,9 +30,11 @@ type Driver interface {
 
 	CreateVmInstance(vmInstance param.CreateVmInstanceParam) (*view.VmInstanceInventoryView, error)
 	StopVminstance(uuid string) (*view.VmInstanceInventoryView, error)
+	DestroyVmInstance(uuid string) error
 	DeleteVmInstance(uuid string) error
 
 	CreateImage(uuid param.CreateRootVolumeTemplateFromRootVolumeParam) (*view.ImageView, error)
+	AddImage(param param.AddImageParam) (*view.ImageView, error)
 	CreateDataVolume(volume param.CreateDataVolumeParam) (*view.VolumeView, error)
 	ExportImage(image param.ExportImageFromBackupStorageParam) (*view.ExportImageFromBackupStorageResultView, error)
 
@@ -41,21 +43,27 @@ type Driver interface {
 }
 
 func (d *ZStackDriver) GetBackupStorage(uuid string) (*view.BackupStorageInventoryView, error) {
+	log.Printf("[DEBUG] Getting backup storage with UUID: %s", uuid)
 	backupStorage, err := d.client.GetBackupStorage(uuid)
 	if err != nil {
+		log.Printf("[ERROR] Failed to get backup storage: %v", err)
 		return nil, fmt.Errorf("failed to query backup storage: %v", err)
 	}
+	log.Printf("[INFO] Successfully retrieved backup storage")
 	return backupStorage, nil
 }
 
 func (d *ZStackDriver) QueryBackStorage(backupStorageName string) ([]view.BackupStorageInventoryView, error) {
+	log.Printf("[DEBUG] Querying backup storage with name: %s", backupStorageName)
 	params := param.NewQueryParam()
 	params.AddQ("name=" + backupStorageName)
 
 	backupStorages, err := d.client.QueryBackupStorage(params)
 	if err != nil {
+		log.Printf("[ERROR] Failed to query backup storage: %v", err)
 		return nil, fmt.Errorf("failed to query image storage: %v", err)
 	}
+	log.Printf("[INFO] Found %d backup storage(s)", len(backupStorages))
 	return backupStorages, nil
 }
 
@@ -116,6 +124,7 @@ func (d *ZStackDriver) QueryInstanceOffering(instanceOfferingName string) ([]vie
 }
 
 func (d *ZStackDriver) GetVmInstance(uuid string) (*view.VmInstanceInventoryView, error) {
+
 	vmInstance, err := d.client.GetVmInstance(uuid)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query VM instance: %v", err)
@@ -143,12 +152,14 @@ func (d *ZStackDriver) GetZone(uuid string) (*view.ZoneView, error) {
 }
 
 func (d *ZStackDriver) CreateVmInstance(vmInstance param.CreateVmInstanceParam) (*view.VmInstanceInventoryView, error) {
-	log.Printf("creating...")
+	log.Printf("[INFO] Creating VM instance with name: %s", vmInstance.Params.Name)
 	vm, err := d.client.CreateVmInstance(vmInstance)
-	log.Printf("fr")
+
 	if err != nil {
+		log.Printf("[ERROR] Failed to create VM instance: %v", err)
 		return nil, fmt.Errorf("failed to create VM instance: %v", err)
 	}
+	log.Printf("[INFO] Successfully created VM instance with UUID: %s", vm.UUID)
 	return vm, nil
 }
 
@@ -173,12 +184,28 @@ func (d *ZStackDriver) DeleteVmInstance(uuid string) error {
 	return nil
 }
 
+func (d *ZStackDriver) DestroyVmInstance(uuid string) error {
+	err := d.client.DestroyVmInstance(uuid, param.DeleteModePermissive)
+	if err != nil {
+		return fmt.Errorf("failed to delete VM instance: %v", err)
+	}
+	return nil
+}
+
 func (d *ZStackDriver) CreateImage(rootVolumeParam param.CreateRootVolumeTemplateFromRootVolumeParam) (*view.ImageView, error) {
 	img, err := d.client.CreateRootVolumeTemplateFromRootVolume(rootVolumeParam)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create image: %v", err)
 	}
 	return &img, nil
+}
+
+func (d *ZStackDriver) AddImage(image param.AddImageParam) (*view.ImageView, error) {
+	img, err := d.client.AddImage(image)
+	if err != nil {
+		return nil, fmt.Errorf("failed to add image: %v", err)
+	}
+	return img, nil
 }
 
 func (d *ZStackDriver) ExportImage(image param.ExportImageFromBackupStorageParam) (*view.ExportImageFromBackupStorageResultView, error) {
@@ -215,34 +242,36 @@ func (d *ZStackDriver) AttachDataVolumeToVm(vmUuid, volumeUuid string) (*view.Vo
 }
 
 func (d *ZStackDriver) WaitForSSH(vmUuid string, sshPort int, timeout time.Duration) error {
+	log.Printf("[INFO] Waiting for SSH connectivity on VM %s", vmUuid)
 	vm, err := d.GetVmInstance(vmUuid)
 	if err != nil {
+		log.Printf("[ERROR] Failed to get VM instance: %v", err)
 		return fmt.Errorf("failed to get VM instance: %v", err)
 	}
 
 	ip := vm.VMNics[0].IP
 	if ip == "" {
+		log.Printf("[ERROR] VM %s has no default IP", vmUuid)
 		return fmt.Errorf("VM %s has no default IP", vmUuid)
 	}
 
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
+		log.Printf("[DEBUG] Attempting SSH connection to %s:%d", ip, sshPort)
 		conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", ip, sshPort), 5*time.Second)
 		if err == nil {
 			conn.Close()
+			log.Printf("[INFO] Successfully established SSH connection")
 			return nil
 		}
+		log.Printf("[DEBUG] SSH connection attempt failed, retrying...")
 		time.Sleep(5 * time.Second)
 	}
+	log.Printf("[ERROR] Timeout waiting for SSH on VM %s", vmUuid)
 	return fmt.Errorf("timeout waiting for SSH on VM %s", vmUuid)
 }
 
 func addSystemTags(tags []string, args ...string) []string {
 	tags = append(tags, args...)
-	/*
-		for _, v := range args {
-			tags = append(tags, v)
-		}
-	*/
 	return tags
 }

@@ -2,6 +2,8 @@ package zstack
 
 import (
 	"context"
+	"fmt"
+	"log"
 
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
 	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
@@ -9,7 +11,6 @@ import (
 )
 
 type StepCreateImage struct {
-	// vm *param.CreateVmInstanceParam
 }
 
 func (s *StepCreateImage) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {
@@ -17,8 +18,10 @@ func (s *StepCreateImage) Run(ctx context.Context, state multistep.StateBag) mul
 	config := state.Get("config").(*Config)
 	driver := state.Get("driver").(Driver)
 
-	rootVolumeUuid := config.RootVolumeUuid
+	ui.Say(fmt.Sprintf("Creating image '%s' from VM root volume...", config.ImageName))
+	log.Printf("[INFO] Starting image creation from root volume: %s", config.RootVolumeUuid)
 
+	rootVolumeUuid := config.RootVolumeUuid
 	createImageFromRootVolumeParam := param.CreateRootVolumeTemplateFromRootVolumeParam{
 		BaseParam:      param.BaseParam{},
 		RootVolumeUuid: rootVolumeUuid,
@@ -35,11 +38,15 @@ func (s *StepCreateImage) Run(ctx context.Context, state multistep.StateBag) mul
 	ui.Say("Create Image from vm instance root volume...")
 
 	if err != nil {
-		ui.Say("failt to create image from vm instance root volume")
+		ui.Error(fmt.Sprintf("Failed to create image: %s", err))
+		log.Printf("[ERROR] Failed to create image: %v", err)
 		return multistep.ActionHalt
 	}
 	config.ImageUuid = image.UUID
-	ui.Say("created image from vm instance ")
+	state.Put("config", config)
+
+	log.Printf("[INFO] Successfully created image with UUID: %s", image.UUID)
+	ui.Say(fmt.Sprintf("Successfully created image '%s' (UUID: %s)", config.ImageName, image.UUID))
 	return multistep.ActionContinue
 }
 

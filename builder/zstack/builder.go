@@ -9,19 +9,15 @@ import (
 	"github.com/hashicorp/packer-plugin-sdk/communicator"
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
 	"github.com/hashicorp/packer-plugin-sdk/multistep/commonsteps"
-
 	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
-	//	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
 )
 
 const BuilderId = "packer.zstack"
 
 type Builder struct {
-	//client *client.ZSClient    `mapstructure:",squash"`
 	config Config
 	runner multistep.Runner
 	ui     packersdk.Ui
-	//ctx    interpolate.Context `mapstructure:",squash"`
 }
 
 func (b *Builder) ConfigSpec() hcldec.ObjectSpec { return b.config.FlatMapstructure().HCL2Spec() }
@@ -59,9 +55,24 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 	state.Put("config", &b.config)
 	state.Put("hook", hook)
 
-	// 定义执行步骤
-	steps := []multistep.Step{
+	baseSteps := []multistep.Step{
 		&StepPreValidate{},
+	}
+
+	if b.config.SourceImageUrl != "" && b.config.Format != "" && b.config.Platform != "" {
+		imageSteps := []multistep.Step{
+			&StepAddImage{},
+			&StepWaitForImageReady{},
+		}
+		baseSteps = append(baseSteps, imageSteps...)
+	} else {
+		imageSteps := []multistep.Step{
+			&StepSourceImageValidate{},
+		}
+		baseSteps = append(baseSteps, imageSteps...)
+	}
+
+	remainingSteps := []multistep.Step{
 		&StepCreateVMInstance{},
 		&StepWaitForRunning{},
 		&StepAttachGuestTools{},
@@ -72,19 +83,31 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 		},
 		&commonsteps.StepProvision{}, &StepStopVmInstance{},
 		&StepCreateImage{},
+		&StepExpungeVmInstance{},
 		&StepExportImage{},
 	}
 
+	steps := append(baseSteps, remainingSteps...)
+
 	log.Printf("[DEBUG] Completed Pre Step with config: %+v", b.config)
-	// 执行流程
+
 	b.runner = commonsteps.NewRunner(steps, b.config.PackerConfig, ui)
 	b.runner.Run(ctx, state)
 
-	// 返回空 Artifact（仅测试用）
+	p, _ := state.GetOk("image_url")
+	if p == nil {
+		p = []string{}
+	}
+
 	if rawErr, ok := state.GetOk("error"); ok {
 		return nil, rawErr.(error)
 	}
-	return nil, nil
+
+	artifact := &Artifact{
+		config:    b.config,
+		exportUrl: p.([]string),
+	}
+	return artifact, nil
 }
 
 func commHost(host string) func(multistep.StateBag) (string, error) {
@@ -93,7 +116,6 @@ func commHost(host string) func(multistep.StateBag) (string, error) {
 			return host, nil
 		}
 
-		// 从state中获取VM的IP地址
 		config, ok := state.Get("config").(*Config)
 		if !ok || config == nil {
 			return "", fmt.Errorf("IP address not found")
