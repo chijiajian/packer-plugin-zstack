@@ -3,7 +3,7 @@ module github.com/zstackio/packer-plugin-zstack
 replace zstack.io/zstack-sdk-go => ./zstack-sdk-go
 
 // go 1.21.0
-go 1.23.0
+go 1.23
 
 require (
 	github.com/hashicorp/hcl/v2 v2.19.1
