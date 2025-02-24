@@ -85,4 +85,11 @@ release:
   #- glob: ./docs.zip
 
 changelog:
-  skip: true
+  use: git
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^ci:'
+      - 'typo'
