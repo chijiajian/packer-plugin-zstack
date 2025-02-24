@@ -23,6 +23,7 @@ type Builder struct {
 func (b *Builder) ConfigSpec() hcldec.ObjectSpec { return b.config.FlatMapstructure().HCL2Spec() }
 
 func (b *Builder) Prepare(raws ...interface{}) ([]string, []string, error) {
+
 	errs := b.config.Prepare(raws...)
 
 	if b.config.Comm.Type == "" {
