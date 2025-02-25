@@ -1,7 +1,4 @@
 
-The zstack builder is used to create ZStack Image by VM Instance
-
-
 <!-- Builder Configuration Fields -->
 
 **Required**

@@ -1,6 +1,14 @@
 NAME=zstack
 BINARY=packer-plugin-${NAME}
 
+check-env:
+	@echo "Checking Go environment..."
+	@which go >/dev/null || (echo "Error: Go is not installed" && exit 1)
+	@echo "Go version: $$(go version)"
+	@echo "GOPATH: $${GOPATH}"
+	@echo "GOBIN: $${GOBIN}"
+
+	
 COUNT?=1
 TEST?=$(shell go list ./...)
 HASHICORP_PACKER_PLUGIN_SDK_VERSION?=$(shell go list -m github.com/hashicorp/packer-plugin-sdk | cut -d " " -f2)
