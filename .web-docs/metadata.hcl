@@ -5,7 +5,7 @@
 # This metadata.hcl file and the adjacent `components` docs directory should
 # be kept in a `.web-docs` directory at the root of your plugin repository.
 integration {
-  name = "ZStackCloud"
+  name = "ZStack"
   description = "The ZStack Cloud plugin can be used with HashiCorp Packer to create custom images on ZStack Cloud."
   identifier = "packer/chijiajian/zstack"
   docs {
@@ -27,7 +27,7 @@ integration {
   }
   component {
     type = "builder"
-    name = "ZStackCloud"
-    slug = "zstackcloud"
+    name = "ZStack"
+    slug = "zstack"
   }
 }

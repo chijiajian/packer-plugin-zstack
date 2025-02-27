@@ -1,11 +1,5 @@
-<!--
-  Include a short overview about the plugin.
 
-  This document is a great location for creating a table of contents for each
-  of the components the plugin may provide. This document should load automatically
-  when navigating to the docs directory for a plugin.
-
--->
+The zstack builder is used to create ZStack Image by VM Instance
 
 ### Installation
 
@@ -35,10 +29,6 @@ $ packer plugins install github.com/chijiajian/packer-plugin-zstack
 #### Builders
 
 - [builder](/packer/integrations/hashicorp/zstack/latest/components/builder/builder-name) - The scaffolding builder is used to create endless Packer
-  plugins using a consistent plugin structure.
-
-
- endless Packer
   plugins using a consistent plugin structure.
 
 
