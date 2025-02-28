@@ -26,15 +26,6 @@ func (s *StepPreValidate) Run(ctx context.Context, state multistep.StateBag) mul
 	config.NetworkConfig.L3NetworkUuid = networks[0].UUID
 	ui.Say("L3 network validated")
 
-	instanceOfferings, err := validateInstanceOffering(state)
-	if err != nil {
-		ui.Errorf("Instance Offering validation failed: %s", err)
-		return multistep.ActionHalt
-	}
-
-	config.InstanceConfig.InstanceOfferingUuid = instanceOfferings[0].UUID
-	ui.Say("instance offering validated")
-
 	backupStoarges, err := validateBackupStorage(state)
 	if err != nil {
 		ui.Errorf("image storage validation failed: ", err)
@@ -63,22 +54,6 @@ func validateNetwork(state multistep.StateBag) ([]view.L3NetworkInventoryView, e
 	}
 
 	return networks, nil
-}
-
-func validateInstanceOffering(state multistep.StateBag) ([]view.InstanceOfferingInventoryView, error) {
-	config := state.Get("config").(*Config)
-	driver := state.Get("driver").(Driver)
-
-	instanceOffering, err := driver.QueryInstanceOffering(config.InstanceOfferingName)
-	if err != nil {
-		return nil, fmt.Errorf("error querying L3 Network: %s", err)
-	}
-
-	if instanceOffering == nil {
-		return nil, fmt.Errorf("instanceOffering not found")
-	}
-
-	return instanceOffering, nil
 }
 
 func validateBackupStorage(state multistep.StateBag) ([]view.BackupStorageInventoryView, error) {

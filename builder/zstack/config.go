@@ -54,7 +54,7 @@ type InstanceConfig struct {
 	IP                   string `mapstructure:"ip"`
 	CPUNum               int64  `mapstructure:"cpu_num"`
 	MemorySize           int64  `mapstructure:"memory_size"`
-	DiskSize             int64  `mapstructure:"disk_size"`
+	//DiskSize             int64  `mapstructure:"disk_size"`
 }
 
 type BackupStorageConfig struct {

@@ -70,7 +70,10 @@ func (c *AccessConfig) Prepare(raws ...interface{}) []error {
 
 func (c *AccessConfig) CreateClient() (*client.ZSClient, error) {
 	var cli *client.ZSClient
-
+	var port = 8080
+	if c.Port != 8080 {
+		c.Port = port
+	}
 	if c.AccountName != "" && c.AccountPassword != "" {
 		cli = client.NewZSClient(client.NewZSConfig(c.Host, c.Port, "zstack").LoginAccount(c.AccountName, c.AccountPassword).ReadOnly(false).Debug(true))
 		_, err := cli.Login()

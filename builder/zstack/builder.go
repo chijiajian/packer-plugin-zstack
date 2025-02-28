@@ -73,6 +73,13 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 		baseSteps = append(baseSteps, imageSteps...)
 	}
 
+	if b.config.InstanceConfig.InstanceOfferingName != "" {
+		log.Printf("[DEBUG] InstanceOffering validate...")
+		instanceOfferingSteps := []multistep.Step{
+			&StepInstanceOfferingValidate{},
+		}
+		baseSteps = append(baseSteps, instanceOfferingSteps...)
+	}
 	remainingSteps := []multistep.Step{
 		&StepCreateVMInstance{},
 		&StepWaitForRunning{},

@@ -7,6 +7,7 @@ import (
 
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
 	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
+	"github.com/zstackio/packer-plugin-zstack/builder/zstack/utils"
 	"golang.org/x/net/context"
 	"zstack.io/zstack-sdk-go/pkg/param"
 )
@@ -47,26 +48,30 @@ func (s *StepCreateVMInstance) Run(ctx context.Context, state multistep.StateBag
 			RequestIp:  "",
 		},
 		Params: param.CreateVmInstanceDetailParam{
-			Name:                 config.InstanceName,
-			Description:          "Auto created by packer-plugin-zstack",
-			InstanceOfferingUUID: config.InstanceOfferingUuid,
-			ImageUUID:            config.ImageUuid,
-			L3NetworkUuids:       []string{config.L3NetworkUuid},
+			Name:        config.InstanceName,
+			Description: "Auto created by packer-plugin-zstack",
+			//	InstanceOfferingUUID: config.InstanceOfferingUuid,
+			ImageUUID:      config.ImageUuid,
+			L3NetworkUuids: []string{config.L3NetworkUuid},
 		},
 	}
 
+	//log.Printf("[DEBUG] config.InstanceOfferingUuid: %s", config.InstanceOfferingUuid)
 	if config.InstanceOfferingUuid != "" {
 		createVmInstanceParam.Params.InstanceOfferingUUID = config.InstanceOfferingUuid
 	} else {
+		//log.Printf("[DEBUG] config.CPUNum: %d, config.MemorySize: %d, config.DiskSize: %d", config.CPUNum, config.MemorySize, config.DiskSize)
 		if config.CPUNum > 0 {
 			createVmInstanceParam.Params.CpuNum = config.CPUNum
 		}
 		if config.MemorySize > 0 {
-			createVmInstanceParam.Params.MemorySize = config.MemorySize
+			createVmInstanceParam.Params.MemorySize = utils.MBToBytes(config.MemorySize)
 		}
-		if config.DiskSize > 0 {
-			createVmInstanceParam.Params.RootDiskSize = &config.DiskSize
-		}
+		/*
+			if config.DiskSize > 0 {
+				createVmInstanceParam.Params.RootDiskSize =utils.GBToBytes(config.DiskSize)
+			}
+		*/
 	}
 
 	instance, err := driver.CreateVmInstance(createVmInstanceParam)
