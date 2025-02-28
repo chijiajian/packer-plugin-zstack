@@ -52,9 +52,21 @@ func (s *StepCreateVMInstance) Run(ctx context.Context, state multistep.StateBag
 			InstanceOfferingUUID: config.InstanceOfferingUuid,
 			ImageUUID:            config.ImageUuid,
 			L3NetworkUuids:       []string{config.L3NetworkUuid},
-			//MemorySize:           config.MemorySize,
-			//CpuNum:               config.CpuNum,
 		},
+	}
+
+	if config.InstanceOfferingUuid != "" {
+		createVmInstanceParam.Params.InstanceOfferingUUID = config.InstanceOfferingUuid
+	} else {
+		if config.CPUNum > 0 {
+			createVmInstanceParam.Params.CpuNum = config.CPUNum
+		}
+		if config.MemorySize > 0 {
+			createVmInstanceParam.Params.MemorySize = config.MemorySize
+		}
+		if config.DiskSize > 0 {
+			createVmInstanceParam.Params.RootDiskSize = &config.DiskSize
+		}
 	}
 
 	instance, err := driver.CreateVmInstance(createVmInstanceParam)
@@ -75,32 +87,5 @@ func (s *StepCreateVMInstance) Run(ctx context.Context, state multistep.StateBag
 }
 
 func (s *StepCreateVMInstance) Cleanup(state multistep.StateBag) {
-	/*
-		ui := state.Get("ui").(packersdk.Ui)
-		config := state.Get("config").(*Config)
-		driver := state.Get("driver").(Driver)
-
-		if state.Get("debug_mode").(bool) {
-			log.Printf("[INFO] Keeping instance due to keep_instance_on_failure setting")
-			return
-		}
-		if config.InstanceUuid != "" {
-			ui.Say("Cleaning up VM instance...")
-			if err := driver.DeleteVmInstance(config.InstanceUuid); err != nil {
-				ui.Error(fmt.Sprintf("Error cleaning up VM instance: %s", err))
-				log.Printf("[ERROR] Failed to cleanup VM instance: %v", err)
-			}
-			config.InstanceUuid = ""
-			return
-		}
-
-
-			ui.Say("Cleaning up VM instance...")
-			if err := driver.DeleteVmInstance(config.InstanceUuid); err != nil {
-				ui.Error(fmt.Sprintf("Error cleaning up VM instance: %s", err))
-			}
-			config.InstanceUuid = ""
-			state.Remove("config")
-	*/
 
 }
