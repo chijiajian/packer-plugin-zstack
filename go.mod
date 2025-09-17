@@ -1,6 +1,6 @@
 module github.com/zstackio/packer-plugin-zstack
 
-replace zstack.io/zstack-sdk-go => ./zstack-sdk-go
+//replace zstack.io/zstack-sdk-go => ./zstack-sdk-go
 
 go 1.22.8
 
@@ -8,10 +8,12 @@ require (
 	github.com/hashicorp/hcl/v2 v2.19.1
 	github.com/hashicorp/packer-plugin-sdk v0.6.0
 	github.com/stretchr/testify v1.8.4
+	github.com/terraform-zstack-modules/zstack-sdk-go v1.0.1
 	github.com/zclconf/go-cty v1.13.3
 	golang.org/x/crypto v0.31.0
 	golang.org/x/net v0.25.0
-	zstack.io/zstack-sdk-go v0.0.0-00010101000000-000000000000
+
+//zstack.io/zstack-sdk-go v0.0.0-00010101000000-000000000000
 )
 
 require (

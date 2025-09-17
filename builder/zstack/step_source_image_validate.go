@@ -6,7 +6,7 @@ import (
 
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
 	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
-	"zstack.io/zstack-sdk-go/pkg/view"
+	"github.com/terraform-zstack-modules/zstack-sdk-go/pkg/view"
 )
 
 type StepSourceImageValidate struct {

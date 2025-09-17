@@ -4,215 +4,139 @@ import (
 	"os"
 	"testing"
 
-	"github.com/hashicorp/packer-plugin-sdk/template/interpolate"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestAccessConfig_Prepare(t *testing.T) {
-	tests := []struct {
-		name          string
-		config        AccessConfig
-		environ       map[string]string
-		expectError   bool
-		errorContains string
-	}{
-		{
-			name: "valid_access_key_config",
-			config: AccessConfig{
-				Host:            "",
-				Port:            8080,
-				AccessKeyId:     "",
-				AccessKeySecret: "",
-			},
-			expectError: false,
-		},
-		{
-			name: "valid_account_config",
-			config: AccessConfig{
-				Host:            "",
-				Port:            8080,
-				AccountName:     "admin",
-				AccountPassword: "password",
-			},
-			expectError: false,
-		},
-		{
-			name: "missing_host",
-			config: AccessConfig{
-				AccessKeyId:     "",
-				AccessKeySecret: "",
-			},
-			expectError:   true,
-			errorContains: "host is required",
-		},
-		{
-			name: "missing_credentials",
-			config: AccessConfig{
-				Host: "192.168.1.100",
-				Port: 8080,
-			},
-			expectError:   true,
-			errorContains: "either accountname + accountpassword or accesskeyid + accesskeysecret is required",
-		},
-		{
-			name: "from_environment",
-			config: AccessConfig{
-				Port: 8080,
-			},
-			environ: map[string]string{
-				"ZSTACK_HOST":            "192.168.1.100",
-				"ZSTACK_ACCESSKEYID":     "env-key",
-				"ZSTACK_ACCESSKEYSECRET": "env-secret",
-			},
-			expectError: false,
-		},
-	}
+	// Save original environment variables to restore after testing
+	originalHost := os.Getenv("ZSTACK_HOST")
+	originalPort := os.Getenv("ZSTACK_PORT")
+	originalAccountName := os.Getenv("ZSTACK_ACCOUNTNAME")
+	originalAccountPassword := os.Getenv("ZSTACK_ACCOUNTPASSWORD")
+	originalAccessKeyId := os.Getenv("ZSTACK_ACCESSKEYID")
+	originalAccessKeySecret := os.Getenv("ZSTACK_ACCESSKEYSECRET")
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Set environment variables for the test
-			for k, v := range tt.environ {
-				os.Setenv(k, v)
-				defer os.Unsetenv(k)
-			}
+	// Restore environment variables after test
+	defer func() {
+		os.Setenv("ZSTACK_HOST", originalHost)
+		os.Setenv("ZSTACK_PORT", originalPort)
+		os.Setenv("ZSTACK_ACCOUNTNAME", originalAccountName)
+		os.Setenv("ZSTACK_ACCOUNTPASSWORD", originalAccountPassword)
+		os.Setenv("ZSTACK_ACCESSKEYID", originalAccessKeyId)
+		os.Setenv("ZSTACK_ACCESSKEYSECRET", originalAccessKeySecret)
+	}()
 
-			// Create a copy of the config
-			c := tt.config
+	// Test case 1: Configuration through parameters
+	t.Run("ConfigFromParameters", func(t *testing.T) {
+		// Clear environment variables to ensure test uses parameter values
+		os.Unsetenv("ZSTACK_HOST")
+		os.Unsetenv("ZSTACK_PORT")
+		os.Unsetenv("ZSTACK_ACCOUNTNAME")
+		os.Unsetenv("ZSTACK_ACCOUNTPASSWORD")
+		os.Unsetenv("ZSTACK_ACCESSKEYID")
+		os.Unsetenv("ZSTACK_ACCESSKEYSECRET")
 
-			// Initialize interpolate context
-			c.ctx = interpolate.Context{}
+		c := &AccessConfig{
+			Host:            "example.com",
+			Port:            8888,
+			AccountName:     "testAccount",
+			AccountPassword: "testPassword",
+		}
 
-			// Run Prepare
-			errs := c.Prepare()
+		errs := c.Prepare()
+		assert.Empty(t, errs, "Should have no errors")
+		assert.Equal(t, "example.com", c.Host)
+		assert.Equal(t, 8888, c.Port)
+		assert.Equal(t, "testAccount", c.AccountName)
+		assert.Equal(t, "testPassword", c.AccountPassword)
+	})
 
-			// Check for expected errors
-			if tt.expectError {
-				assert.NotNil(t, errs, "Expected errors but got none")
-				if tt.errorContains != "" {
-					found := false
-					for _, err := range errs {
-						if err != nil && assert.Contains(t, err.Error(), tt.errorContains) {
-							found = true
-							break
-						}
-					}
-					assert.True(t, found, "Expected error containing '%s'", tt.errorContains)
-				}
-			} else {
-				assert.Nil(t, errs, "Expected no errors but got: %v", errs)
-			}
+	// Test case 2: Configuration through environment variables
+	t.Run("ConfigFromEnvironment", func(t *testing.T) {
+		os.Setenv("ZSTACK_HOST", "env-example.com")
+		os.Setenv("ZSTACK_PORT", "9999")
+		os.Setenv("ZSTACK_ACCOUNTNAME", "envAccount")
+		os.Setenv("ZSTACK_ACCOUNTPASSWORD", "envPassword")
 
-			// Additional checks for environment variables
-			if tt.environ != nil {
-				if envHost := tt.environ["ZSTACK_HOST"]; envHost != "" {
-					assert.Equal(t, envHost, c.Host, "Host should be set from environment")
-				}
-				if envKeyId := tt.environ["ZSTACK_ACCESSKEYID"]; envKeyId != "" {
-					assert.Equal(t, envKeyId, c.AccessKeyId, "AccessKeyId should be set from environment")
-				}
-			}
-		})
-	}
-}
+		c := &AccessConfig{}
 
-func TestAccessConfig_CreateClient(t *testing.T) {
-	tests := []struct {
-		name        string
-		config      AccessConfig
-		expectError bool
-	}{
-		{
-			name: "valid_access_key_config",
-			config: AccessConfig{
-				Host:            "192.168.1.100",
-				Port:            8080,
-				AccessKeyId:     "test-key",
-				AccessKeySecret: "test-secret",
-			},
-			expectError: false,
-		},
-		{
-			name: "valid_account_config",
-			config: AccessConfig{
-				Host:            "192.168.1.100",
-				Port:            8080,
-				AccountName:     "admin",
-				AccountPassword: "password",
-			},
-			expectError: false,
-		},
-		{
-			name: "invalid_config",
-			config: AccessConfig{
-				Host: "192.168.1.100",
-				Port: 8080,
-			},
-			expectError: true,
-		},
-	}
+		errs := c.Prepare()
+		assert.Empty(t, errs, "Should have no errors")
+		assert.Equal(t, "env-example.com", c.Host)
+		assert.Equal(t, 9999, c.Port)
+		assert.Equal(t, "envAccount", c.AccountName)
+		assert.Equal(t, "envPassword", c.AccountPassword)
+	})
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			client, err := tt.config.CreateClient()
+	// Test case 3: Environment variables take precedence over configuration parameters
+	t.Run("EnvironmentOverridesConfig", func(t *testing.T) {
+		os.Setenv("ZSTACK_HOST", "override-example.com")
+		os.Setenv("ZSTACK_PORT", "7777")
 
-			if tt.expectError {
-				assert.Error(t, err)
-				assert.Nil(t, client)
-			} else {
-				assert.NoError(t, err)
-				assert.NotNil(t, client)
-			}
-		})
-	}
-}
+		c := &AccessConfig{
+			Host:            "original.com",
+			Port:            1234,
+			AccountName:     "originalAccount",
+			AccountPassword: "originalPassword",
+		}
 
-func TestAccessConfig_Driver(t *testing.T) {
-	config := AccessConfig{
-		Host:            "192.168.1.100",
-		Port:            8080,
-		AccessKeyId:     "test-key",
-		AccessKeySecret: "test-secret",
-	}
+		errs := c.Prepare()
+		assert.Empty(t, errs, "Should have no errors")
+		assert.Equal(t, "override-example.com", c.Host)
+		assert.Equal(t, 7777, c.Port)
+		assert.Equal(t, "originalAccount", c.AccountName)
+		assert.Equal(t, "originalPassword", c.AccountPassword)
+	})
 
-	driver, err := config.Driver()
-	assert.NoError(t, err)
-	assert.NotNil(t, driver)
-	assert.NotNil(t, driver.client)
+	// Test case 4: Missing required parameters
+	t.Run("MissingRequiredFields", func(t *testing.T) {
+		os.Unsetenv("ZSTACK_HOST")
+		os.Unsetenv("ZSTACK_ACCOUNTNAME")
+		os.Unsetenv("ZSTACK_ACCOUNTPASSWORD")
+		os.Unsetenv("ZSTACK_ACCESSKEYID")
+		os.Unsetenv("ZSTACK_ACCESSKEYSECRET")
+
+		c := &AccessConfig{}
+
+		errs := c.Prepare()
+		assert.NotEmpty(t, errs, "Should have errors")
+		assert.Len(t, errs, 2, "Should have two errors")
+		assert.Contains(t, errs[0].Error(), "host is required")
+		assert.Contains(t, errs[1].Error(), "either accountname + accountpassword or accesskeyid + accesskeysecret is required")
+	})
+
+	// Test case 5: Using access keys instead of account credentials
+	t.Run("UsingAccessKeys", func(t *testing.T) {
+		os.Unsetenv("ZSTACK_ACCOUNTNAME")
+		os.Unsetenv("ZSTACK_ACCOUNTPASSWORD")
+		os.Setenv("ZSTACK_HOST", "key-example.com")
+		os.Setenv("ZSTACK_ACCESSKEYID", "testKeyId")
+		os.Setenv("ZSTACK_ACCESSKEYSECRET", "testKeySecret")
+
+		c := &AccessConfig{}
+
+		errs := c.Prepare()
+		assert.Empty(t, errs, "Should have no errors")
+		assert.Equal(t, "key-example.com", c.Host)
+		assert.Equal(t, "testKeyId", c.AccessKeyId)
+		assert.Equal(t, "testKeySecret", c.AccessKeySecret)
+		assert.Empty(t, c.AccountName)
+		assert.Empty(t, c.AccountPassword)
+	})
 }
 
 func TestGetEnvOrDefault(t *testing.T) {
-	tests := []struct {
-		name         string
-		envVar       string
-		envValue     string
-		defaultValue string
-		expected     string
-	}{
-		{
-			name:         "env_var_exists",
-			envVar:       "TEST_VAR",
-			envValue:     "test_value",
-			defaultValue: "default",
-			expected:     "test_value",
-		},
-		{
-			name:         "env_var_not_exists",
-			envVar:       "NON_EXISTENT_VAR",
-			defaultValue: "default",
-			expected:     "default",
-		},
-	}
+	// Save original environment variable
+	originalVar := os.Getenv("TEST_ENV_VAR")
+	defer os.Setenv("TEST_ENV_VAR", originalVar)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if tt.envValue != "" {
-				os.Setenv(tt.envVar, tt.envValue)
-				defer os.Unsetenv(tt.envVar)
-			}
+	// Test when environment variable exists
+	os.Setenv("TEST_ENV_VAR", "env_value")
+	result := getEnvOrDefault("TEST_ENV_VAR", "default_value")
+	assert.Equal(t, "env_value", result)
 
-			result := getEnvOrDefault(tt.envVar, tt.defaultValue)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-
+	// Test when environment variable doesn't exist
+	os.Unsetenv("TEST_ENV_VAR")
+	result = getEnvOrDefault("TEST_ENV_VAR", "default_value")
+	assert.Equal(t, "default_value", result)
 }

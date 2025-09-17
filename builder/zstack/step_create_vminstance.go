@@ -7,9 +7,9 @@ import (
 
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
 	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
+	"github.com/terraform-zstack-modules/zstack-sdk-go/pkg/param"
 	"github.com/zstackio/packer-plugin-zstack/builder/zstack/utils"
 	"golang.org/x/net/context"
-	"zstack.io/zstack-sdk-go/pkg/param"
 )
 
 type StepCreateVMInstance struct {
