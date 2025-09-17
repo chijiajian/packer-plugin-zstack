@@ -33,10 +33,11 @@ type FlatConfig struct {
 	InstanceUuid         *string `mapstructure:"instance_uuid" cty:"instance_uuid" hcl:"instance_uuid"`
 	SshKey               *string `mapstructure:"sshkey" cty:"sshkey" hcl:"sshkey"`
 	UserData             *string `mapstructure:"userdata" cty:"userdata" hcl:"userdata"`
-	MemorySize           *string `mapstructure:"memory_size" cty:"memory_size" hcl:"memory_size"`
-	CpuNum               *string `mapstructure:"cpu_num" cty:"cpu_num" hcl:"cpu_num"`
-	BackupStorageName    *string `mapstructure:"backup_storage_name" cty:"backup_storage_name" hcl:"backup_storage_name"`
-	BackupStorageUuid    *string `mapstructure:"backup_storage_uuid" cty:"backup_storage_uuid" hcl:"backup_storage_uuid"`
+	MemorySize           *int64  `mapstructure:"memory_size" cty:"memory_size" hcl:"memory_size"`
+	CPUNum               *int64  `mapstructure:"cpu_num" cty:"cpu_num" hcl:"cpu_num"`
+	//DiskSize             *int64  `mapstructure:"disk_size" cty:"disk_size" hcl:"disk_size"`
+	BackupStorageName *string `mapstructure:"backup_storage_name" cty:"backup_storage_name" hcl:"backup_storage_name"`
+	BackupStorageUuid *string `mapstructure:"backup_storage_uuid" cty:"backup_storage_uuid" hcl:"backup_storage_uuid"`
 
 	SSHHost     *string `mapstructure:"ssh_host" cty:"ssh_host" hcl:"ssh_host"`
 	SSHPort     *int    `mapstructure:"ssh_port" cty:"ssh_port" hcl:"ssh_port"`
@@ -79,10 +80,11 @@ func (*FlatConfig) HCL2Spec() map[string]hcldec.Spec {
 		"instance_offering_uuid": &hcldec.AttrSpec{Name: "instance_offering_uuid", Type: cty.String, Required: false},
 		"sshkey":                 &hcldec.AttrSpec{Name: "sshkey", Type: cty.String, Required: false},
 		"userdata":               &hcldec.AttrSpec{Name: "userdata", Type: cty.String, Required: false},
-		"memory_size":            &hcldec.AttrSpec{Name: "memory_size", Type: cty.String, Required: false},
-		"cpu_num":                &hcldec.AttrSpec{Name: "cpu_num", Type: cty.String, Required: false},
-		"backup_storage_name":    &hcldec.AttrSpec{Name: "backup_storage_name", Type: cty.String, Required: false},
-		"backup_storage_uuid":    &hcldec.AttrSpec{Name: "backup_storage_uuid", Type: cty.String, Required: false},
+		"memory_size":            &hcldec.AttrSpec{Name: "memory_size", Type: cty.Number, Required: false},
+		"cpu_num":                &hcldec.AttrSpec{Name: "cpu_num", Type: cty.Number, Required: false},
+		//	"disk_size":              &hcldec.AttrSpec{Name: "disk_size", Type: cty.Number, Required: false},
+		"backup_storage_name": &hcldec.AttrSpec{Name: "backup_storage_name", Type: cty.String, Required: false},
+		"backup_storage_uuid": &hcldec.AttrSpec{Name: "backup_storage_uuid", Type: cty.String, Required: false},
 
 		"ssh_host":     &hcldec.AttrSpec{Name: "ssh_host", Type: cty.String, Required: false},
 		"ssh_port":     &hcldec.AttrSpec{Name: "ssh_port", Type: cty.Number, Required: false},

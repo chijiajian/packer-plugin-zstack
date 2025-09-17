@@ -7,8 +7,9 @@ import (
 
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
 	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
+	"github.com/terraform-zstack-modules/zstack-sdk-go/pkg/param"
+	"github.com/zstackio/packer-plugin-zstack/builder/zstack/utils"
 	"golang.org/x/net/context"
-	"zstack.io/zstack-sdk-go/pkg/param"
 )
 
 type StepCreateVMInstance struct {
@@ -47,14 +48,30 @@ func (s *StepCreateVMInstance) Run(ctx context.Context, state multistep.StateBag
 			RequestIp:  "",
 		},
 		Params: param.CreateVmInstanceDetailParam{
-			Name:                 config.InstanceName,
-			Description:          "Auto created by packer-plugin-zstack",
-			InstanceOfferingUUID: config.InstanceOfferingUuid,
-			ImageUUID:            config.ImageUuid,
-			L3NetworkUuids:       []string{config.L3NetworkUuid},
-			//MemorySize:           config.MemorySize,
-			//CpuNum:               config.CpuNum,
+			Name:        config.InstanceName,
+			Description: "Auto created by packer-plugin-zstack",
+			//	InstanceOfferingUUID: config.InstanceOfferingUuid,
+			ImageUUID:      config.ImageUuid,
+			L3NetworkUuids: []string{config.L3NetworkUuid},
 		},
+	}
+
+	//log.Printf("[DEBUG] config.InstanceOfferingUuid: %s", config.InstanceOfferingUuid)
+	if config.InstanceOfferingUuid != "" {
+		createVmInstanceParam.Params.InstanceOfferingUUID = config.InstanceOfferingUuid
+	} else {
+		//log.Printf("[DEBUG] config.CPUNum: %d, config.MemorySize: %d, config.DiskSize: %d", config.CPUNum, config.MemorySize, config.DiskSize)
+		if config.CPUNum > 0 {
+			createVmInstanceParam.Params.CpuNum = config.CPUNum
+		}
+		if config.MemorySize > 0 {
+			createVmInstanceParam.Params.MemorySize = utils.MBToBytes(config.MemorySize)
+		}
+		/*
+			if config.DiskSize > 0 {
+				createVmInstanceParam.Params.RootDiskSize =utils.GBToBytes(config.DiskSize)
+			}
+		*/
 	}
 
 	instance, err := driver.CreateVmInstance(createVmInstanceParam)
@@ -75,32 +92,5 @@ func (s *StepCreateVMInstance) Run(ctx context.Context, state multistep.StateBag
 }
 
 func (s *StepCreateVMInstance) Cleanup(state multistep.StateBag) {
-	/*
-		ui := state.Get("ui").(packersdk.Ui)
-		config := state.Get("config").(*Config)
-		driver := state.Get("driver").(Driver)
-
-		if state.Get("debug_mode").(bool) {
-			log.Printf("[INFO] Keeping instance due to keep_instance_on_failure setting")
-			return
-		}
-		if config.InstanceUuid != "" {
-			ui.Say("Cleaning up VM instance...")
-			if err := driver.DeleteVmInstance(config.InstanceUuid); err != nil {
-				ui.Error(fmt.Sprintf("Error cleaning up VM instance: %s", err))
-				log.Printf("[ERROR] Failed to cleanup VM instance: %v", err)
-			}
-			config.InstanceUuid = ""
-			return
-		}
-
-
-			ui.Say("Cleaning up VM instance...")
-			if err := driver.DeleteVmInstance(config.InstanceUuid); err != nil {
-				ui.Error(fmt.Sprintf("Error cleaning up VM instance: %s", err))
-			}
-			config.InstanceUuid = ""
-			state.Remove("config")
-	*/
 
 }

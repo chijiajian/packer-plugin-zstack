@@ -48,12 +48,13 @@ type InstanceConfig struct {
 	InstanceUuid         string `mapstructure:"instance_uuid"`
 	InstanceOfferingName string `mapstructure:"instance_offering_name"`
 	InstanceOfferingUuid string `mapstructure:"instance_offering_uuid"`
-	MemorySize           int64  `mapstructure:"memory_size"`
-	CpuNum               int64  `mapstructure:"cpu_num"`
 	SshKey               string `mapstructure:"sshkey"`
 	UserData             string `mapstructure:"userdata"`
 	RootVolumeUuid       string `mapstructure:"root_volume_uuid"`
 	IP                   string `mapstructure:"ip"`
+	CPUNum               int64  `mapstructure:"cpu_num"`
+	MemorySize           int64  `mapstructure:"memory_size"`
+	//DiskSize             int64  `mapstructure:"disk_size"`
 }
 
 type BackupStorageConfig struct {
