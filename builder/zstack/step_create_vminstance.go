@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
 	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
@@ -29,15 +30,17 @@ func (s *StepCreateVMInstance) Run(ctx context.Context, state multistep.StateBag
 		systemtags = addSystemTags(systemtags, fmt.Sprintf("sshkey::%s", config.SshKey))
 	}
 	if config.UserData != "" {
-		userData := config.UserData
-		if userData[len(userData)-1] == '\n' {
-			userData = userData[:len(userData)-1]
-		}
+		userData := strings.TrimSpace(config.UserData)
+		/*
+			if userData[len(userData)-1] == '\n' {
+				userData = userData[:len(userData)-1]
+			}
+		*/
 		if _, err := base64.StdEncoding.DecodeString(userData); err != nil {
-			log.Printf("[DEBUG] base64 encoding user data...")
+			//log.Printf("[DEBUG] base64 encoding user data...")
 			userData = base64.StdEncoding.EncodeToString([]byte(userData))
 		}
-		log.Printf("[DEBUG] userdata: %s", userData)
+		//log.Printf("[DEBUG] userdata: %s", userData)
 		systemtags = addSystemTags(systemtags, fmt.Sprintf("userdata::%s", userData))
 	}
 
@@ -48,35 +51,30 @@ func (s *StepCreateVMInstance) Run(ctx context.Context, state multistep.StateBag
 			RequestIp:  "",
 		},
 		Params: param.CreateVmInstanceDetailParam{
-			Name:        config.InstanceName,
-			Description: "Auto created by packer-plugin-zstack",
-			//	InstanceOfferingUUID: config.InstanceOfferingUuid,
+			Name:           config.InstanceName,
+			Description:    "Auto created by packer-plugin-zstack",
 			ImageUUID:      config.ImageUuid,
 			L3NetworkUuids: []string{config.L3NetworkUuid},
 		},
 	}
 
-	//log.Printf("[DEBUG] config.InstanceOfferingUuid: %s", config.InstanceOfferingUuid)
 	if config.InstanceOfferingUuid != "" {
 		createVmInstanceParam.Params.InstanceOfferingUUID = config.InstanceOfferingUuid
 	} else {
-		//log.Printf("[DEBUG] config.CPUNum: %d, config.MemorySize: %d, config.DiskSize: %d", config.CPUNum, config.MemorySize, config.DiskSize)
 		if config.CPUNum > 0 {
 			createVmInstanceParam.Params.CpuNum = config.CPUNum
 		}
 		if config.MemorySize > 0 {
 			createVmInstanceParam.Params.MemorySize = utils.MBToBytes(config.MemorySize)
 		}
-		/*
-			if config.DiskSize > 0 {
-				createVmInstanceParam.Params.RootDiskSize =utils.GBToBytes(config.DiskSize)
-			}
-		*/
 	}
 
 	instance, err := driver.CreateVmInstance(createVmInstanceParam)
 	if err != nil {
-
+		ui.Error(fmt.Sprintf("Failed to create VM instance: %v", err))
+		log.Printf("[ERROR] Failed to create VM instance: %v", err)
+		state.Put("error", err)
+		return multistep.ActionHalt
 	}
 
 	config.InstanceUuid = instance.UUID

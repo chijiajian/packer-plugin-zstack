@@ -3,6 +3,7 @@ package zstack
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
@@ -16,6 +17,13 @@ func (s *StepWaitForImageReady) Run(ctx context.Context, state multistep.StateBa
 	config := state.Get("config").(*Config)
 	driver := state.Get("driver").(Driver)
 
+	if config.ImageUuid == "" {
+		err := fmt.Errorf("image UUID is empty, cannot wait for ready status")
+		ui.Error(err.Error())
+		state.Put("error", err)
+		return multistep.ActionHalt
+	}
+
 	ui.Say("Waiting for image status to become ready...")
 
 	timeout := time.After(5 * time.Minute)
@@ -25,17 +33,21 @@ func (s *StepWaitForImageReady) Run(ctx context.Context, state multistep.StateBa
 	for {
 		select {
 		case <-timeout:
-			err := fmt.Errorf("timeout waiting for image status to become ready")
+			err := fmt.Errorf("timeout waiting for image %s status to become ready", config.ImageUuid)
 			state.Put("error", err)
 			ui.Errorf(err.Error())
+			log.Printf("[ERROR] %v", err)
 			return multistep.ActionHalt
 		case <-ticker.C:
 			image, err := driver.GetImage(config.ImageUuid)
 			if err != nil {
-				state.Put("error", err)
 				ui.Errorf(err.Error())
+				log.Printf("[ERROR] Failed to get image %s: %v", config.ImageUuid, err)
+				state.Put("error", err)
 				return multistep.ActionHalt
 			}
+
+			log.Printf("[DEBUG] Image %s status: %s", config.ImageUuid, image.Status)
 
 			if image.Status == "Ready" {
 				ui.Say("Image status is now ready!")
@@ -44,6 +56,7 @@ func (s *StepWaitForImageReady) Run(ctx context.Context, state multistep.StateBa
 			ui.Message(fmt.Sprintf("image status is %s, waiting...", image.Status))
 
 		case <-ctx.Done():
+			log.Printf("[INFO] Context cancelled while waiting for image %s", config.ImageUuid)
 			return multistep.ActionHalt
 		}
 	}

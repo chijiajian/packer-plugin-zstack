@@ -18,32 +18,29 @@ func (s *StepAddImage) Run(ctx context.Context, state multistep.StateBag) multis
 	config := state.Get("config").(*Config)
 	driver := state.Get("driver").(Driver)
 
-	ui.Say("Starting image addition process...")
-	log.Printf("[INFO] Beginning image addition step")
+	if config.SourceImageUrl == "" || config.SourceImage == "" {
+		ui.Error("Source image URL or name is empty")
+		log.Printf("[ERROR] Source image URL or name is empty")
+		return multistep.ActionHalt
+	}
 
-	platform := config.Platform
-	format := config.Format
-	guestOsTyep := config.GuestOsType
-	sourceImageUrl := config.SourceImageUrl
-	backupStorage := config.BackupStorageUuid
-	imageName := config.SourceImage
+	ui.Say("Starting image addition process...")
+	log.Printf("[INFO] Adding image '%s' from URL '%s'", config.SourceImage, config.SourceImageUrl)
 
 	imageParam := param.AddImageParam{
 		BaseParam: param.BaseParam{},
 		Params: param.AddImageDetailParam{
-			Name:               imageName,
+			Name:               config.SourceImage,
 			Description:        "Image added via Packer build process",
-			Url:                sourceImageUrl,
+			Url:                config.SourceImageUrl,
 			MediaType:          param.RootVolumeTemplate,
-			GuestOsType:        guestOsTyep,
+			GuestOsType:        config.GuestOsType,
 			System:             false,
-			Format:             param.ImageFormat(format),
-			Platform:           platform,
-			BackupStorageUuids: []string{backupStorage},
+			Format:             param.ImageFormat(config.Format),
+			Platform:           config.Platform,
+			BackupStorageUuids: []string{config.BackupStorageUuid},
 		},
 	}
-	log.Printf("[DEBUG] Adding image with configuration: %+v", imageParam)
-	ui.Say(fmt.Sprintf("Adding image '%s' to storage...", imageName))
 
 	img, err := driver.AddImage(imageParam)
 	if err != nil {
@@ -51,8 +48,9 @@ func (s *StepAddImage) Run(ctx context.Context, state multistep.StateBag) multis
 		log.Printf("[ERROR] Failed to add image: %v", err)
 		return multistep.ActionHalt
 	}
-	log.Printf("[INFO] Successfully added image with UUID: %s", img.UUID)
-	ui.Say(fmt.Sprintf("Successfully added image '%s' (UUID: %s)", imageName, img.UUID))
+
+	ui.Say(fmt.Sprintf("Successfully added image '%s' (UUID: %s)", config.SourceImage, img.UUID))
+	log.Printf("[INFO] Image added successfully with UUID: %s", img.UUID)
 
 	config.ImageUuid = img.UUID
 	state.Put("config", config)

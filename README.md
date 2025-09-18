@@ -1,26 +1,26 @@
 # Packer Plugin ZStack
 
 The `ZStack` multi-component plugin can be used with HashiCorp [Packer](https://www.packer.io)
-to create VM images. For the full list of available features for this plugin see [docs](docs).
+to create custom images from ZStack VM instances. For the full list of available features for this plugin see [docs](docs).
 
 ## Installation
 
 ### Using pre-built releases
 
 #### Using the `packer init` command
+
 Starting from version 1.7, Packer supports a new `packer init` command allowing
 automatic installation of Packer plugins. Read the
 [Packer documentation](https://www.packer.io/docs/commands/init) for more information.
 
-To install this plugin, copy and paste this code into your Packer configuration .
-Then, run [`packer init`](https://www.packer.io/docs/commands/init).
+To install this plugin, copy and paste this code into your Packer configuration. Then, run [`packer init`](https://www.packer.io/docs/commands/init).
 
 ```hcl
 packer {
   required_plugins {
-    qemu = {
-      version = "v0.0.1"
-      source  = "github.com/zstackio/zstack"
+    zstack = {
+      version = ">= 1.0.0"
+      source  = "github.com/chijiajian/packer-plugin-zstack"
     }
   }
 }

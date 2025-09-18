@@ -21,10 +21,10 @@ func (s *StepCreateImage) Run(ctx context.Context, state multistep.StateBag) mul
 	ui.Say(fmt.Sprintf("Creating image '%s' from VM root volume...", config.ImageName))
 	log.Printf("[INFO] Starting image creation from root volume: %s", config.RootVolumeUuid)
 
-	rootVolumeUuid := config.RootVolumeUuid
+	//rootVolumeUuid := config.RootVolumeUuid
 	createImageFromRootVolumeParam := param.CreateRootVolumeTemplateFromRootVolumeParam{
 		BaseParam:      param.BaseParam{},
-		RootVolumeUuid: rootVolumeUuid,
+		RootVolumeUuid: config.RootVolumeUuid,
 		Params: param.CreateRootVolumeTemplateFromRootVolumeDetailParam{
 			Name:               config.ImageName,
 			Description:        "Auto created by packer-plugin-zstack",
@@ -33,15 +33,13 @@ func (s *StepCreateImage) Run(ctx context.Context, state multistep.StateBag) mul
 	}
 
 	image, err := driver.CreateImage(createImageFromRootVolumeParam)
-
-	//vms, _ := driver.GetVmInstance(instanceUuid)
-	ui.Say("Create Image from vm instance root volume...")
-
 	if err != nil {
-		ui.Error(fmt.Sprintf("Failed to create image: %s", err))
+		ui.Error(fmt.Sprintf("Failed to create image: %v", err))
 		log.Printf("[ERROR] Failed to create image: %v", err)
+		state.Put("error", err)
 		return multistep.ActionHalt
 	}
+
 	config.ImageUuid = image.UUID
 	state.Put("config", config)
 

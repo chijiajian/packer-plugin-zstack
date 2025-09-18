@@ -16,6 +16,13 @@ func (s *StepWaitForRunning) Run(ctx context.Context, state multistep.StateBag) 
 	config := state.Get("config").(*Config)
 	driver := state.Get("driver").(Driver)
 
+	if config.InstanceUuid == "" {
+		err := fmt.Errorf("Instance UUID is empty, cannot wait for running")
+		ui.Error(err.Error())
+		state.Put("error", err)
+		return multistep.ActionHalt
+	}
+
 	ui.Say("Waiting for VM instance to become running...")
 
 	timeout := time.After(5 * time.Minute)
@@ -25,7 +32,7 @@ func (s *StepWaitForRunning) Run(ctx context.Context, state multistep.StateBag) 
 	for {
 		select {
 		case <-timeout:
-			err := fmt.Errorf("timeout waiting for instance to become running")
+			err := fmt.Errorf("timeout waiting for instance %s to become running", config.InstanceUuid)
 			state.Put("error", err)
 			ui.Errorf(err.Error())
 			return multistep.ActionHalt
@@ -33,7 +40,7 @@ func (s *StepWaitForRunning) Run(ctx context.Context, state multistep.StateBag) 
 			instance, err := driver.GetVmInstance(config.InstanceUuid)
 			if err != nil {
 				state.Put("error", err)
-				ui.Errorf(err.Error())
+				ui.Errorf("Failed to get VM instance: %v", err)
 				return multistep.ActionHalt
 			}
 
@@ -41,9 +48,10 @@ func (s *StepWaitForRunning) Run(ctx context.Context, state multistep.StateBag) 
 				ui.Say("Instance is now running!")
 				return multistep.ActionContinue
 			}
-			ui.Message(fmt.Sprintf("Instance state is %s, waiting...", instance.State))
+			ui.Message(fmt.Sprintf("[%s] Instance state is %s, waiting...", time.Now().Format(time.RFC3339), instance.State))
 
 		case <-ctx.Done():
+			ui.Error("Context cancelled while waiting for VM running")
 			return multistep.ActionHalt
 		}
 	}

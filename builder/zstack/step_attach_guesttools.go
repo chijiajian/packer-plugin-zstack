@@ -24,18 +24,27 @@ func (s *StepAttachGuestTools) Run(ctx context.Context, state multistep.StateBag
 		log.Printf("[ERROR] %v", err)
 		return multistep.ActionHalt
 	}
-	log.Printf("[INFO] Starting guest tools attachment for VM: %s", instanceUuid)
-	ui.Say("Starting guest tools attachment process...")
 
-	vm, _ := driver.GetVmInstance(instanceUuid)
-	err := driver.AttachGuestToolsToVm(instanceUuid)
+	vm, err := driver.GetVmInstance(instanceUuid)
 	if err != nil {
-		ui.Error(fmt.Sprintf("Failed to attach guest tools: %s", err))
-		log.Printf("[ERROR] Failed to attach guest tools to VM %s: %v", instanceUuid, err)
+		ui.Error(fmt.Sprintf("Failed to get VM instance: %v", err))
+		log.Printf("[ERROR] Failed to get VM instance %s: %v", instanceUuid, err)
+		state.Put("error", err)
 		return multistep.ActionHalt
 	}
-	log.Printf("[INFO] Successfully attached guest tools to VM %s", instanceUuid)
+
+	ui.Say(fmt.Sprintf("Attaching guest tools to VM '%s'...", vm.Name))
+	log.Printf("[INFO] Attaching guest tools to VM '%s' (UUID: %s)", vm.Name, instanceUuid)
+
+	if err := driver.AttachGuestToolsToVm(instanceUuid); err != nil {
+		ui.Error(fmt.Sprintf("Failed to attach guest tools: %v", err))
+		log.Printf("[ERROR] Failed to attach guest tools to VM %s: %v", instanceUuid, err)
+		state.Put("error", err)
+		return multistep.ActionHalt
+	}
+
 	ui.Say(fmt.Sprintf("Successfully attached guest tools to VM '%s'", vm.Name))
+	log.Printf("[INFO] Successfully attached guest tools to VM %s", instanceUuid)
 
 	return multistep.ActionContinue
 }

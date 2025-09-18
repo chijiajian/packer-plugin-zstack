@@ -106,20 +106,20 @@ func (c *Config) Prepare(raws ...interface{}) error {
 	if c.SourceImageUrl != "" {
 		log.Printf("[INFO] Configuring source image from URL: %s", c.SourceImageUrl)
 		if c.Format == "" {
-			log.Printf("[DEBUG] Setting default image format to qcow2")
 			c.Format = "qcow2"
+			log.Printf("[DEBUG] Default image format set to: %s", c.Format)
 		}
 		if c.Platform == "" {
-			log.Printf("[DEBUG] Setting default platform to Linux")
 			c.Platform = "Linux"
+			log.Printf("[DEBUG] Default platform set to: %s", c.Platform)
 		}
 		if c.SourceImage == "" {
-			errs = packersdk.MultiErrorAppend(errs, errors.New("source image name must be sepcified"))
+			errs = packersdk.MultiErrorAppend(errs, errors.New("source image name must be specified when using source_image_url"))
 		}
 	}
 
 	if errs != nil && len(errs.Errors) > 0 {
-		log.Printf("[ERROR] Configuration validation failed: %v", errs)
+		log.Printf("[ERROR] Configuration validation failed with %d error(s)", len(errs.Errors))
 		return errs
 	}
 

@@ -16,19 +16,24 @@ func (s *StepExpungeVmInstance) Run(ctx context.Context, state multistep.StateBa
 	driver := state.Get("driver").(Driver)
 
 	instanceUuid := config.InstanceUuid
-
-	var err error
-
-	err = driver.DestroyVmInstance(instanceUuid)
-	if err != nil {
-		return multistep.ActionHalt
-	}
-	err = driver.DeleteVmInstance(instanceUuid)
-	if err != nil {
-		return multistep.ActionHalt
+	if instanceUuid == "" {
+		ui.Say("No VM instance to expunge, skipping...")
+		return multistep.ActionContinue
 	}
 
-	ui.Say("Expunge vm instance...")
+	ui.Say("Expunging VM instance...")
+
+	if err := driver.DestroyVmInstance(instanceUuid); err != nil {
+		ui.Error("Failed to destroy VM instance: " + err.Error())
+		state.Put("error", err)
+		return multistep.ActionHalt
+	}
+
+	if err := driver.DeleteVmInstance(instanceUuid); err != nil {
+		ui.Error("Failed to delete VM instance: " + err.Error())
+		state.Put("error", err)
+		return multistep.ActionHalt
+	}
 
 	config.InstanceUuid = ""
 	ui.Say("Expunge vm instance success...")

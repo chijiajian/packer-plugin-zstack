@@ -1,0 +1,33 @@
+name: Notify Integration Release (Manual)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  notify-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout this repo
+        uses: actions/checkout@v3
+
+      - name: Ensure that Docs are Compiled
+        run: |
+          make generate
+          if [[ -n "$(git status -s)" ]]; then
+            echo "Docs have been updated, but the compiled docs have not been committed."
+            exit 1
+          fi
+
+      - name: Perform the Release
+        uses: actions/checkout@v3
+        with:
+          repository: hashicorp/integration-release-action
+          path: ./integration-release-action
+
+      - name: Notify Release
+        uses: ./integration-release-action
+        with:
+          integration_identifier: "packer/chijiajian/zstack"
+          release_version: "manual"
+          release_sha: ${{ github.sha }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}

@@ -16,9 +16,6 @@ import (
 func main() {
 	pps := plugin.NewSet()
 	pps.RegisterBuilder(plugin.DEFAULT_NAME, new(zstack.Builder))
-	//pps.RegisterProvisioner("my-provisioner", new(scaffoldingProv.Provisioner))
-	//pps.RegisterPostProcessor("my-post-processor", new(scaffoldingPP.PostProcessor))
-	//pps.RegisterDatasource("my-datasource", new(scaffoldingData.Datasource))
 	pps.SetVersion(zstackVersion.PluginVersion)
 	err := pps.Run()
 	if err != nil {

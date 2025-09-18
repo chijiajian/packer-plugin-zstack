@@ -28,7 +28,6 @@ $ packer plugins install github.com/chijiajian/packer-plugin-zstack
 
 #### Builders
 
-- [builder](/packer/integrations/hashicorp/zstack/latest/components/builder/builder-name) - The scaffolding builder is used to create endless Packer
-  plugins using a consistent plugin structure.
+- [builder](/packer/integrations/hashicorp/zstack/latest/components/builder/zstack) - Provides the capability to build customized images based on an existing ZStack VM instance.
 
 

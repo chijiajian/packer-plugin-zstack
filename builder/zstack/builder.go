@@ -45,6 +45,7 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 	b.ui = ui
 	log.Printf("[DEBUG] Starting build with config: %+v", b.config)
 	log.Printf("[DEBUG] Starting Prepare method")
+
 	driver, err := b.config.AccessConfig.Driver()
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize ZStack Driver: %v", err)
@@ -89,7 +90,8 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 			Host:      commHost(b.config.Comm.SSHHost),
 			SSHConfig: b.config.Comm.SSHConfigFunc(),
 		},
-		&commonsteps.StepProvision{}, &StepStopVmInstance{},
+		&commonsteps.StepProvision{},
+		&StepStopVmInstance{},
 		&StepCreateImage{},
 		&StepExpungeVmInstance{},
 		&StepExportImage{},
@@ -102,18 +104,44 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 	b.runner = commonsteps.NewRunner(steps, b.config.PackerConfig, ui)
 	b.runner.Run(ctx, state)
 
-	p, _ := state.GetOk("image_url")
-	if p == nil {
-		p = []string{}
+	var urls []string
+	if v, ok := state.GetOk("image_url"); ok {
+		switch val := v.(type) {
+		case string:
+			if val != "" {
+				urls = []string{val}
+			}
+		case []string:
+			urls = val
+		case []interface{}:
+			for _, item := range val {
+				if s, ok := item.(string); ok {
+					urls = append(urls, s)
+				}
+			}
+		default:
+			log.Printf("[WARN] unexpected type for image_url in state: %T", v)
+		}
 	}
 
+	// Error Handler
 	if rawErr, ok := state.GetOk("error"); ok {
-		return nil, rawErr.(error)
+		if err, ok := rawErr.(error); ok {
+			return nil, err
+		}
+		return nil, fmt.Errorf("unexpected error type in state: %T", rawErr)
 	}
+
+	/*
+		p, _ := state.GetOk("image_url")
+		if p == nil {
+			p = []string{}
+		}
+	*/
 
 	artifact := &Artifact{
 		config:    b.config,
-		exportUrl: p.([]string),
+		exportUrl: urls,
 	}
 	return artifact, nil
 }

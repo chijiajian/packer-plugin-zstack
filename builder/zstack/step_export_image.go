@@ -2,6 +2,7 @@ package zstack
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
 	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
@@ -16,28 +17,32 @@ func (s *StepExportImage) Run(ctx context.Context, state multistep.StateBag) mul
 	config := state.Get("config").(*Config)
 	driver := state.Get("driver").(Driver)
 
-	backupStorageUuid := config.BackupStorageUuid
-	imageUuid := config.ImageUuid
-	//rootVolumeUuid := config.RootVolumeUuid  param.ExportImageFromBackupStorageParam
+	if config.BackupStorageUuid == "" || config.ImageUuid == "" {
+		err := fmt.Errorf("backup storage UUID or image UUID is empty")
+		ui.Error(err.Error())
+		state.Put("error", err)
+		return multistep.ActionHalt
+	}
+
+	ui.Say("Exporting image to backup storage...")
 
 	exportImageParam := param.ExportImageFromBackupStorageParam{
-		BackupStorageUuid: backupStorageUuid,
+		BackupStorageUuid: config.BackupStorageUuid,
 		ExportImageFromBackupStorage: param.ExportImageFromBackupStorageDetailParam{
-			ImageUuid: imageUuid,
+			ImageUuid: config.ImageUuid,
 		},
 	}
 
 	exportImageResult, err := driver.ExportImage(exportImageParam)
-
-	//vms, _ := driver.GetVmInstance(instanceUuid)
-	ui.Say("Export Image from...")
-
 	if err != nil {
-		ui.Say("failt to export image")
+		ui.Error("Failed to export image: " + err.Error())
+		state.Put("error", err)
 		return multistep.ActionHalt
 	}
+
 	config.ImageUrl = exportImageResult.ImageUrl
-	ui.Say("Export Image from..." + config.ImageUrl)
+	state.Put("config", config)
+	ui.Say("Successfully exported image: " + config.ImageUrl)
 	return multistep.ActionContinue
 }
 

@@ -1,6 +1,7 @@
 package zstack
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net"
@@ -156,14 +157,14 @@ func (d *ZStackDriver) CreateVmInstance(vmInstance param.CreateVmInstanceParam) 
 	vm, err := d.client.CreateVmInstance(vmInstance)
 
 	if err != nil {
-		log.Printf("[ERROR] Failed to create VM instance: %v", err)
-		return nil, fmt.Errorf("failed to create VM instance: %v", err)
+		return nil, fmt.Errorf("failed to create VM instance '%s': %v", vmInstance.Params.Name, err)
 	}
 	log.Printf("[INFO] Successfully created VM instance with UUID: %s", vm.UUID)
 	return vm, nil
 }
 
 func (d *ZStackDriver) StopVminstance(uuid string) (*view.VmInstanceInventoryView, error) {
+	log.Printf("[INFO] Stopping VM instance '%s'", uuid)
 	vmInstance, err := d.client.StopVmInstance(uuid, param.StopVmInstanceParam{
 		StopVmInstance: param.StopVmInstanceDetailParam{
 			Type:   param.Grace,
@@ -171,44 +172,53 @@ func (d *ZStackDriver) StopVminstance(uuid string) (*view.VmInstanceInventoryVie
 		},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to stop VM instance: %v", err)
+		return nil, fmt.Errorf("failed to stop VM instance '%s': %v", uuid, err)
 	}
 	return vmInstance, nil
 }
 
 func (d *ZStackDriver) DeleteVmInstance(uuid string) error {
+	log.Printf("[INFO] Deleting VM instance '%s'", uuid)
 	err := d.client.ExpungeVmInstance(uuid)
 	if err != nil {
-		return fmt.Errorf("failed to delete VM instance: %v", err)
+		return fmt.Errorf("failed to delete VM instance '%s': %v", uuid, err)
 	}
+	log.Printf("[INFO] Successfully deleted VM instance '%s'", uuid)
 	return nil
 }
 
 func (d *ZStackDriver) DestroyVmInstance(uuid string) error {
+	log.Printf("[INFO] Destroying VM instance '%s'", uuid)
 	err := d.client.DestroyVmInstance(uuid, param.DeleteModePermissive)
 	if err != nil {
-		return fmt.Errorf("failed to delete VM instance: %v", err)
+		return fmt.Errorf("failed to destroy VM instance '%s': %v", uuid, err)
 	}
+	log.Printf("[INFO] Successfully destroyed VM instance '%s'", uuid)
 	return nil
 }
 
 func (d *ZStackDriver) CreateImage(rootVolumeParam param.CreateRootVolumeTemplateFromRootVolumeParam) (*view.ImageView, error) {
+	log.Printf("[INFO] Creating image from root volume.")
 	img, err := d.client.CreateRootVolumeTemplateFromRootVolume(rootVolumeParam)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create image: %v", err)
 	}
+	log.Printf("[INFO] Successfully created image '%s'", img.UUID)
 	return &img, nil
 }
 
 func (d *ZStackDriver) AddImage(image param.AddImageParam) (*view.ImageView, error) {
+	log.Printf("[INFO] Adding image '%s'", image.Params.Name)
 	img, err := d.client.AddImage(image)
 	if err != nil {
-		return nil, fmt.Errorf("failed to add image: %v", err)
+		return nil, fmt.Errorf("failed to add image '%s': %v", image.Params.Name, err)
 	}
+	log.Printf("[INFO] Successfully added image '%s' with UUID: %s", img.Name, img.UUID)
 	return img, nil
 }
 
 func (d *ZStackDriver) ExportImage(image param.ExportImageFromBackupStorageParam) (*view.ExportImageFromBackupStorageResultView, error) {
+	log.Printf("[INFO] Exporting image from backup storage '%s'", image.BackupStorageUuid)
 	exportedImg, err := d.client.ExportImageFromBackupStorage(image)
 	if err != nil {
 		return nil, fmt.Errorf("failed to export image: %v", err)
@@ -225,19 +235,23 @@ func (d *ZStackDriver) CreateDataVolume(volume param.CreateDataVolumeParam) (*vi
 }
 
 func (d *ZStackDriver) AttachGuestToolsToVm(vmUuid string) error {
+	log.Printf("[INFO] Attaching guest tools to VM '%s'", vmUuid)
 	err := d.client.AttachGuestToolsIsoToVm(vmUuid)
 
 	if err != nil {
-		return fmt.Errorf("failed to attach guest tools to VM: %v", err)
+		return fmt.Errorf("failed to attach guest tools to VM '%s': %v", vmUuid, err)
 	}
+	log.Printf("[INFO] Successfully attached guest tools to VM '%s'", vmUuid)
 	return nil
 }
 
 func (d *ZStackDriver) AttachDataVolumeToVm(vmUuid, volumeUuid string) (*view.VolumeView, error) {
+	log.Printf("[INFO] Attaching data volume '%s' to VM '%s'", volumeUuid, vmUuid)
 	datavol, err := d.client.AttachDataVolumeToVm(volumeUuid, vmUuid)
 	if err != nil {
-		return nil, fmt.Errorf("failed to attach data volume to VM: %v", err)
+		return nil, fmt.Errorf("failed to attach data volume '%s' to VM '%s': %v", volumeUuid, vmUuid, err)
 	}
+	log.Printf("[INFO] Successfully attached data volume '%s' to VM '%s'", volumeUuid, vmUuid)
 	return datavol, nil
 }
 
@@ -245,30 +259,51 @@ func (d *ZStackDriver) WaitForSSH(vmUuid string, sshPort int, timeout time.Durat
 	log.Printf("[INFO] Waiting for SSH connectivity on VM %s", vmUuid)
 	vm, err := d.GetVmInstance(vmUuid)
 	if err != nil {
-		log.Printf("[ERROR] Failed to get VM instance: %v", err)
 		return fmt.Errorf("failed to get VM instance: %v", err)
 	}
 
+	if len(vm.VMNics) == 0 || vm.VMNics[0].IP == "" {
+		return fmt.Errorf("VM '%s' has no default IP to connect", vmUuid)
+	}
 	ip := vm.VMNics[0].IP
-	if ip == "" {
-		log.Printf("[ERROR] VM %s has no default IP", vmUuid)
-		return fmt.Errorf("VM %s has no default IP", vmUuid)
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("timeout waiting for SSH on VM '%s'", vmUuid)
+		case <-ticker.C:
+			conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", ip, sshPort), 5*time.Second)
+			if err == nil {
+				conn.Close()
+				log.Printf("[INFO] Successfully established SSH connection to %s:%d", ip, sshPort)
+				return nil
+			}
+			log.Printf("[DEBUG] SSH connection attempt to %s:%d failed, retrying...", ip, sshPort)
+		}
 	}
 
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		log.Printf("[DEBUG] Attempting SSH connection to %s:%d", ip, sshPort)
-		conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", ip, sshPort), 5*time.Second)
-		if err == nil {
-			conn.Close()
-			log.Printf("[INFO] Successfully established SSH connection")
-			return nil
+	/*
+		deadline := time.Now().Add(timeout)
+		for time.Now().Before(deadline) {
+			log.Printf("[DEBUG] Attempting SSH connection to %s:%d", ip, sshPort)
+			conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", ip, sshPort), 5*time.Second)
+			if err == nil {
+				conn.Close()
+				log.Printf("[INFO] Successfully established SSH connection")
+				return nil
+			}
+			log.Printf("[DEBUG] SSH connection attempt failed, retrying...")
+			time.Sleep(5 * time.Second)
 		}
-		log.Printf("[DEBUG] SSH connection attempt failed, retrying...")
-		time.Sleep(5 * time.Second)
-	}
-	log.Printf("[ERROR] Timeout waiting for SSH on VM %s", vmUuid)
-	return fmt.Errorf("timeout waiting for SSH on VM %s", vmUuid)
+		log.Printf("[ERROR] Timeout waiting for SSH on VM %s", vmUuid)
+		return fmt.Errorf("timeout waiting for SSH on VM %s", vmUuid)
+	*/
 }
 
 func addSystemTags(tags []string, args ...string) []string {
