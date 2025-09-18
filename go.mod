@@ -6,15 +6,16 @@ toolchain go1.24.1
 
 require (
 	github.com/hashicorp/hcl/v2 v2.19.1
-	github.com/hashicorp/packer-plugin-sdk v0.6.1
+	github.com/hashicorp/packer-plugin-sdk v0.6.3
 	github.com/stretchr/testify v1.10.0
 	github.com/terraform-zstack-modules/zstack-sdk-go v1.0.1
 	github.com/zclconf/go-cty v1.13.3
 	golang.org/x/crypto v0.36.0
-	golang.org/x/net v0.37.0
+	golang.org/x/net v0.38.0
 )
 
 require (
+	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/vmihailenco/msgpack/v5 v5.3.5 // indirect
