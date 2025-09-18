@@ -42,9 +42,3 @@ generate: install-packer-sdc
 	@./.web-docs/scripts/compile-to-webdocs.sh "." ".docs" ".web-docs" "hashicorp"
 	@rm -r ".docs"
 
-docs: install-packer-sdc
-	@go generate ./...
-	@rm -rf .docs
-	@packer-sdc renderdocs -src docs -partials docs-partials/ -dst .docs/
-	@./.web-docs/scripts/compile-to-webdocs.sh "." ".docs" ".web-docs" "your-org"
-	@rm -r ".docs"
