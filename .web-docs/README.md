@@ -1,7 +1,5 @@
 
-The ZStack Packer plugin allows you to create custom VM images on ZStack Cloud.
-It supports creating images from existing VM instances, managing instance lifecycle,
-and exporting images to backup storage.
+The zstack builder is used to create ZStack Image by VM Instance
 
 ### Installation
 
@@ -27,10 +25,9 @@ $ packer plugins install github.com/chijiajian/packer-plugin-zstack
 
 ### Components
 
+
 #### Builders
 
 - [builder](/packer/integrations/hashicorp/zstack/latest/components/builder/zstack) - Provides the capability to build customized images based on an existing ZStack VM instance.
-
-
 
 
