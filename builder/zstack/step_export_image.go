@@ -6,7 +6,7 @@ import (
 
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
 	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
-	"github.com/terraform-zstack-modules/zstack-sdk-go/pkg/param"
+	"github.com/zstackio/zstack-sdk-go-v2/pkg/param"
 )
 
 type StepExportImage struct {
@@ -27,13 +27,12 @@ func (s *StepExportImage) Run(ctx context.Context, state multistep.StateBag) mul
 	ui.Say("Exporting image to backup storage...")
 
 	exportImageParam := param.ExportImageFromBackupStorageParam{
-		BackupStorageUuid: config.BackupStorageUuid,
-		ExportImageFromBackupStorage: param.ExportImageFromBackupStorageDetailParam{
+		Params: param.ExportImageFromBackupStorageParamDetail{
 			ImageUuid: config.ImageUuid,
 		},
 	}
 
-	exportImageResult, err := driver.ExportImage(exportImageParam)
+	exportImageResult, err := driver.ExportImage(config.BackupStorageUuid, exportImageParam)
 	if err != nil {
 		ui.Error("Failed to export image: " + err.Error())
 		state.Put("error", err)

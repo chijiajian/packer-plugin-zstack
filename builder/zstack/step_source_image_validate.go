@@ -6,7 +6,7 @@ import (
 
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
 	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
-	"github.com/terraform-zstack-modules/zstack-sdk-go/pkg/view"
+	"github.com/zstackio/zstack-sdk-go-v2/pkg/view"
 )
 
 type StepSourceImageValidate struct {
@@ -29,7 +29,7 @@ func (s *StepSourceImageValidate) Run(ctx context.Context, state multistep.State
 
 	return multistep.ActionContinue
 }
-func validateImage(state multistep.StateBag) ([]view.ImageView, error) {
+func validateImage(state multistep.StateBag) ([]view.ImageInventoryView, error) {
 	config := state.Get("config").(*Config)
 	driver := state.Get("driver").(Driver)
 
