@@ -73,6 +73,7 @@ func (s *StepCreateSSHKey) Run(ctx context.Context, state multistep.StateBag) mu
 	if config.Comm.SSHPublicKey[len(config.Comm.SSHPublicKey)-1] == '\n' {
 		config.Comm.SSHPublicKey = config.Comm.SSHPublicKey[:len(config.Comm.SSHPublicKey)-1]
 	}
+	config.SshKey = string(config.Comm.SSHPublicKey)
 	state.Put("config", config)
 
 	if s.Debug {
@@ -91,4 +92,8 @@ func (s *StepCreateSSHKey) Run(ctx context.Context, state multistep.StateBag) mu
 		}
 	}
 	return multistep.ActionContinue
+}
+
+func (s *StepCreateSSHKey) Cleanup(state multistep.StateBag) {
+	// Keys are in memory, no cleanup needed
 }
