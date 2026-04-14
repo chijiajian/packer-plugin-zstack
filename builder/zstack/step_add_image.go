@@ -7,7 +7,7 @@ import (
 
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
 	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
-	"github.com/terraform-zstack-modules/zstack-sdk-go/pkg/param"
+	"github.com/zstackio/zstack-sdk-go-v2/pkg/param"
 )
 
 type StepAddImage struct {
@@ -29,15 +29,15 @@ func (s *StepAddImage) Run(ctx context.Context, state multistep.StateBag) multis
 
 	imageParam := param.AddImageParam{
 		BaseParam: param.BaseParam{},
-		Params: param.AddImageDetailParam{
+		Params: param.AddImageParamDetail{
 			Name:               config.SourceImage,
-			Description:        "Image added via Packer build process",
+			Description:        strPtr("Image added via Packer build process"),
 			Url:                config.SourceImageUrl,
-			MediaType:          param.RootVolumeTemplate,
-			GuestOsType:        config.GuestOsType,
+			MediaType:          strPtr("RootVolumeTemplate"),
+			GuestOsType:        strPtr(config.GuestOsType),
 			System:             false,
-			Format:             param.ImageFormat(config.Format),
-			Platform:           config.Platform,
+			Format:             strPtr(config.Format),
+			Platform:           strPtr(config.Platform),
 			BackupStorageUuids: []string{config.BackupStorageUuid},
 		},
 	}

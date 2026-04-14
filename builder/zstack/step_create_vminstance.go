@@ -8,13 +8,17 @@ import (
 
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
 	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
-	"github.com/terraform-zstack-modules/zstack-sdk-go/pkg/param"
 	"github.com/zstackio/packer-plugin-zstack/builder/zstack/utils"
+	"github.com/zstackio/zstack-sdk-go-v2/pkg/param"
 	"golang.org/x/net/context"
 )
 
 type StepCreateVMInstance struct {
 	//vm *view.VmInstanceInventoryView
+}
+
+func strPtr(s string) *string {
+	return &s
 }
 
 func (s *StepCreateVMInstance) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {
@@ -47,25 +51,25 @@ func (s *StepCreateVMInstance) Run(ctx context.Context, state multistep.StateBag
 	createVmInstanceParam := param.CreateVmInstanceParam{
 		BaseParam: param.BaseParam{
 			SystemTags: systemtags,
-			UserTags:   nil,
-			RequestIp:  "",
 		},
-		Params: param.CreateVmInstanceDetailParam{
+		Params: param.CreateVmInstanceParamDetail{
 			Name:           config.InstanceName,
-			Description:    "Auto created by packer-plugin-zstack",
-			ImageUUID:      config.ImageUuid,
+			Description:    strPtr("Auto created by packer-plugin-zstack"),
+			ImageUuid:      strPtr(config.ImageUuid),
 			L3NetworkUuids: []string{config.L3NetworkUuid},
 		},
 	}
 
 	if config.InstanceOfferingUuid != "" {
-		createVmInstanceParam.Params.InstanceOfferingUUID = config.InstanceOfferingUuid
+		createVmInstanceParam.Params.InstanceOfferingUuid = strPtr(config.InstanceOfferingUuid)
 	} else {
 		if config.CPUNum > 0 {
-			createVmInstanceParam.Params.CpuNum = config.CPUNum
+			cpuNum := int(config.CPUNum)
+			createVmInstanceParam.Params.CpuNum = &cpuNum
 		}
 		if config.MemorySize > 0 {
-			createVmInstanceParam.Params.MemorySize = utils.MBToBytes(config.MemorySize)
+			memSize := utils.MBToBytes(config.MemorySize)
+			createVmInstanceParam.Params.MemorySize = &memSize
 		}
 	}
 
@@ -78,8 +82,8 @@ func (s *StepCreateVMInstance) Run(ctx context.Context, state multistep.StateBag
 	}
 
 	config.InstanceUuid = instance.UUID
-	config.RootVolumeUuid = instance.RootVolumeUUID
-	config.IP = instance.VMNics[0].IP
+	config.RootVolumeUuid = instance.RootVolumeUuid
+	config.IP = instance.VmNics[0].Ip
 
 	state.Put("config", config)
 	log.Printf("[INFO] Successfully created VM instance (UUID: %s, IP: %s)", instance.UUID, config.IP)
