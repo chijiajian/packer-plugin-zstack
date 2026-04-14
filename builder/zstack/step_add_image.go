@@ -27,11 +27,16 @@ func (s *StepAddImage) Run(ctx context.Context, state multistep.StateBag) multis
 	ui.Say("Starting image addition process...")
 	log.Printf("[INFO] Adding image '%s' from URL '%s'", config.SourceImage, config.SourceImageUrl)
 
+	description := config.ImageDescription
+	if description == "" {
+		description = "Image added via Packer build process"
+	}
+
 	imageParam := param.AddImageParam{
 		BaseParam: param.BaseParam{},
 		Params: param.AddImageParamDetail{
 			Name:               config.SourceImage,
-			Description:        strPtr("Image added via Packer build process"),
+			Description:        &description,
 			Url:                config.SourceImageUrl,
 			MediaType:          strPtr("RootVolumeTemplate"),
 			GuestOsType:        strPtr(config.GuestOsType),

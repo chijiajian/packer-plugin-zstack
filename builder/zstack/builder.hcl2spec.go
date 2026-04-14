@@ -13,14 +13,15 @@ type FlatConfig struct {
 	AccessKeyId     *string `mapstructure:"access_key_id" cty:"access_key_id" hcl:"access_key_id"`
 	AccessKeySecret *string `mapstructure:"access_key_secret" cty:"access_key_secret" hcl:"access_key_secret"`
 
-	SourceImage    *string `mapstructure:"source_image" cty:"source_image" hcl:"source_image"`
-	ImageName      *string `mapstructure:"image_name" cty:"image_name" hcl:"image_name"`
-	ImageUuid      *string `mapstructure:"image_uuid" cty:"image_uuid" hcl:"image_uuid"`
-	RootVolumeUuid *string `mapstructure:"root_volume_uuid" cty:"root_volume_uuid" hcl:"root_volume_uuid"`
-	ImageUrl       *string `mapstructure:"image_url" cty:"image_url" hcl:"image_url"`
-	GuestOsType    *string `mapstructure:"guest_os_type" cty:"guest_os_type" hcl:"guest_os_type"`
-	SourceImageUrl *string `mapstructure:"source_image_url" cty:"source_image_url" hcl:"source_image_url"`
-	Format         *string `mapstructure:"format" cty:"format" hcl:"format"`
+	SourceImage      *string `mapstructure:"source_image" cty:"source_image" hcl:"source_image"`
+	ImageName        *string `mapstructure:"image_name" cty:"image_name" hcl:"image_name"`
+	ImageDescription *string `mapstructure:"image_description" cty:"image_description" hcl:"image_description"`
+	ImageUuid        *string `mapstructure:"image_uuid" cty:"image_uuid" hcl:"image_uuid"`
+	RootVolumeUuid   *string `mapstructure:"root_volume_uuid" cty:"root_volume_uuid" hcl:"root_volume_uuid"`
+	ImageUrl         *string `mapstructure:"image_url" cty:"image_url" hcl:"image_url"`
+	GuestOsType      *string `mapstructure:"guest_os_type" cty:"guest_os_type" hcl:"guest_os_type"`
+	SourceImageUrl   *string `mapstructure:"source_image_url" cty:"source_image_url" hcl:"source_image_url"`
+	Format           *string `mapstructure:"format" cty:"format" hcl:"format"`
 	//BackupStorageUuids *[]string `mapstructure:"backup_storage_uuids" cty:"backup_storage_uuids" hcl:"backup_storage_uuids"`
 	Platform *string `mapstructure:"platform" cty:"platform" hcl:"platform"`
 
@@ -60,14 +61,15 @@ func (*FlatConfig) HCL2Spec() map[string]hcldec.Spec {
 		"access_key_id":     &hcldec.AttrSpec{Name: "access_key_id", Type: cty.String, Required: false},
 		"access_key_secret": &hcldec.AttrSpec{Name: "access_key_secret", Type: cty.String, Required: false},
 
-		"source_image":     &hcldec.AttrSpec{Name: "source_image", Type: cty.String, Required: false},
-		"image_name":       &hcldec.AttrSpec{Name: "image_name", Type: cty.String, Required: false},
-		"image_uuid":       &hcldec.AttrSpec{Name: "image_uuid", Type: cty.String, Required: false},
-		"root_volume_uuid": &hcldec.AttrSpec{Name: "root_volume_uuid", Type: cty.String, Required: false},
-		"image_url":        &hcldec.AttrSpec{Name: "image_url", Type: cty.String, Required: false},
-		"guest_os_type":    &hcldec.AttrSpec{Name: "guest_os_type", Type: cty.String, Required: false},
-		"source_image_url": &hcldec.AttrSpec{Name: "source_image_url", Type: cty.String, Required: false},
-		"format":           &hcldec.AttrSpec{Name: "format", Type: cty.String, Required: false},
+		"source_image":      &hcldec.AttrSpec{Name: "source_image", Type: cty.String, Required: false},
+		"image_name":        &hcldec.AttrSpec{Name: "image_name", Type: cty.String, Required: false},
+		"image_description": &hcldec.AttrSpec{Name: "image_description", Type: cty.String, Required: false},
+		"image_uuid":        &hcldec.AttrSpec{Name: "image_uuid", Type: cty.String, Required: false},
+		"root_volume_uuid":  &hcldec.AttrSpec{Name: "root_volume_uuid", Type: cty.String, Required: false},
+		"image_url":         &hcldec.AttrSpec{Name: "image_url", Type: cty.String, Required: false},
+		"guest_os_type":     &hcldec.AttrSpec{Name: "guest_os_type", Type: cty.String, Required: false},
+		"source_image_url":  &hcldec.AttrSpec{Name: "source_image_url", Type: cty.String, Required: false},
+		"format":            &hcldec.AttrSpec{Name: "format", Type: cty.String, Required: false},
 		//"backup_storage_uuids": &hcldec.AttrSpec{Name: "format", Type: cty.String, Required: false},
 		"platform": &hcldec.AttrSpec{Name: "platform", Type: cty.String, Required: false},
 

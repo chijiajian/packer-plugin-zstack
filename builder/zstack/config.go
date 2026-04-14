@@ -29,6 +29,7 @@ type Config struct {
 
 type ImageConfig struct {
 	ImageName          string   `mapstructure:"image_name"`
+	ImageDescription   string   `mapstructure:"image_description"`
 	SourceImage        string   `mapstructure:"source_image"`
 	GuestOsType        string   `mapstructure:"guest_os_type"`
 	SourceImageUrl     string   `mapstructure:"source_image_url"`
@@ -67,7 +68,7 @@ type ExportImageResult struct {
 	Success  bool   `mapstructure:"export_image_result"`
 }
 
-func (c *Config) Prepare(raws ...interface{}) error {
+func (c *Config) Prepare(raws ...any) error {
 	err := config.Decode(c, &config.DecodeOpts{
 		Interpolate:        true,
 		InterpolateContext: &c.ctx,
