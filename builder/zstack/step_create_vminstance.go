@@ -94,5 +94,37 @@ func (s *StepCreateVMInstance) Run(ctx context.Context, state multistep.StateBag
 }
 
 func (s *StepCreateVMInstance) Cleanup(state multistep.StateBag) {
+	// AC-004-06: Only cleanup on failure — successful builds use StepExpungeVmInstance
+	_, hasError := state.GetOk("error")
+	if !hasError {
+		return
+	}
 
+	config := state.Get("config").(*Config)
+	if config.InstanceUuid == "" {
+		return
+	}
+
+	ui := state.Get("ui").(packersdk.Ui)
+	driver := state.Get("driver").(Driver)
+
+	// AC-004-04: Log cleanup action
+	ui.Say("Cleaning up: destroying temporary VM instance...")
+	log.Printf("[INFO] Cleaning up VM instance '%s' after build failure", config.InstanceUuid)
+
+	if err := driver.DestroyVmInstance(config.InstanceUuid); err != nil {
+		// AC-004-05: Cleanup failure logs warning, doesn't panic
+		log.Printf("[WARN] Failed to destroy VM instance during cleanup: %v", err)
+		ui.Error(fmt.Sprintf("Warning: failed to destroy VM instance during cleanup: %v", err))
+		return
+	}
+
+	if err := driver.DeleteVmInstance(config.InstanceUuid); err != nil {
+		log.Printf("[WARN] Failed to expunge VM instance during cleanup: %v", err)
+		ui.Error(fmt.Sprintf("Warning: failed to expunge VM instance during cleanup: %v", err))
+		return
+	}
+
+	log.Printf("[INFO] Successfully cleaned up VM instance '%s'", config.InstanceUuid)
+	ui.Say("Successfully cleaned up temporary VM instance")
 }
