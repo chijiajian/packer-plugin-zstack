@@ -30,26 +30,42 @@ The zstack builder is used to create ZStack Image by VM Instance
 
 - `source_image` (String) - Name of the source image used to create VM instance.
 
+- `image_uuid` (String) - UUID of the source image. When provided, skips name-based image lookup.
+
 - `source_image_url` (String) - URL of the source image, supports HTTP/HTTPS protocols.
 
 - `format` (String) - Image format, supports formats like "qcow2", "raw", etc.
 
 - `platform` (String) - Operating system platform type, such as "Linux", "Windows", etc.
 
+- `guest_os_type` (String) - Guest OS type, such as "Ubuntu", "CentOS", etc.
+
 - `image_name` (String) - Name of the target image to be created.
+
+- `image_description` (String) - Description for the created image. Defaults to the image name if not set.
 
 **Network Parameters**
 
 - `network_name` (String) - L3 network name for VM network configuration.
 
+- `network_uuid` (String) - UUID of the L3 network. When provided, skips name-based network lookup.
+
 **Instance Parameters**
 
 - `instance_offering_name` (String) - Computing specification name that defines VM resources like CPU and memory.
+
+- `instance_offering_uuid` (String) - UUID of the instance offering. When provided, skips name-based lookup.
+
+- `cpu_num` (Number) - Number of CPU cores for the VM instance. Use instead of instance_offering_name for custom sizing.
+
+- `memory_size` (Number) - Memory size in MB for the VM instance. Use instead of instance_offering_name for custom sizing.
 
 - `instance_name` (String) - Name of the VM instance to be created.
 
 **Storage Parameters**
 - `backup_storage_name` (String) - Name of the backup storage for storing created images.
+
+- `backup_storage_uuid` (String) - UUID of the backup storage. Optional - when neither backup_storage_name nor backup_storage_uuid is specified, the image export step is skipped.
 
 **SSH Parameters**
 - `ssh_username` (String) - SSH username for connecting to the created VM instance.
@@ -65,25 +81,28 @@ The zstack builder is used to create ZStack Image by VM Instance
 
 
 ```hcl
-source "zstack" "test" {
-  zstack_host       = "10.3.3.3"
-  port             = 8080
-  access_key_id     = "aaaaaaa"
-  access_key_secret = "1UQ3bfz9qS4vaaaaaaaaa"
-  
-  source_image      = "Centos8"
-  source_image_url  = "http://example.com/image.qcow2"
+source "zstack" "example" {
+  zstack_host       = "https://zstack.example.com"
+  access_key_id     = env("ZSTACK_ACCESS_KEY_ID")
+  access_key_secret = env("ZSTACK_ACCESS_KEY_SECRET")
+
+  source_image     = "ubuntu-22.04-from-url"
+  source_image_url = "http://mirrors.example.com/images/ubuntu-22.04-server.qcow2"
   format           = "qcow2"
   platform         = "Linux"
-  
-  network_name     = "public-net"
-  instance_offering_name = "min"
-  backup_storage_name = "bs"
-  instance_name    = "packer-test"
-  image_name       = "image-by-packer"
-  
-  ssh_username     = "root"
-  ssh_password     = "password"
+  guest_os_type    = "Ubuntu"
+
+  network_name        = "default-network"
+  cpu_num             = 2
+  memory_size         = 4096
+  backup_storage_name = "local-backup"
+
+  instance_name     = "packer-example"
+  image_name        = "packer-example-image"
+  image_description = "Built with Packer using AK/SK authentication"
+
+  ssh_username = "root"
+  ssh_password = "password"
 }
 
 ```
