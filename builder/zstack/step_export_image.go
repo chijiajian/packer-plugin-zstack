@@ -3,6 +3,7 @@ package zstack
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
 	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
@@ -17,8 +18,15 @@ func (s *StepExportImage) Run(ctx context.Context, state multistep.StateBag) mul
 	config := state.Get("config").(*Config)
 	driver := state.Get("driver").(Driver)
 
-	if config.BackupStorageUuid == "" || config.ImageUuid == "" {
-		err := fmt.Errorf("backup storage UUID or image UUID is empty")
+	// AC-003-01/03: Skip export when no backup storage configured
+	if config.BackupStorageUuid == "" {
+		log.Printf("[INFO] Skipping image export: no backup storage configured")
+		ui.Say("Skipping image export: no backup storage configured")
+		return multistep.ActionContinue
+	}
+
+	if config.ImageUuid == "" {
+		err := fmt.Errorf("image UUID is empty, cannot export")
 		ui.Error(err.Error())
 		state.Put("error", err)
 		return multistep.ActionHalt

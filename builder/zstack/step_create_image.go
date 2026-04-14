@@ -21,14 +21,22 @@ func (s *StepCreateImage) Run(ctx context.Context, state multistep.StateBag) mul
 	ui.Say(fmt.Sprintf("Creating image '%s' from VM root volume...", config.ImageName))
 	log.Printf("[INFO] Starting image creation from root volume: %s", config.RootVolumeUuid)
 
-	//rootVolumeUuid := config.RootVolumeUuid
+	description := config.ImageDescription
+	if description == "" {
+		description = "Auto created by packer-plugin-zstack"
+	}
+
 	createImageFromRootVolumeParam := param.CreateRootVolumeTemplateFromRootVolumeParam{
 		BaseParam: param.BaseParam{},
 		Params: param.CreateRootVolumeTemplateFromRootVolumeParamDetail{
-			Name:               config.ImageName,
-			Description:        strPtr("Auto created by packer-plugin-zstack"),
-			BackupStorageUuids: []string{config.BackupStorageConfig.BackupStorageUuid},
+			Name:        config.ImageName,
+			Description: &description,
 		},
+	}
+
+	// AC-003-03: Only include BackupStorageUuids when configured
+	if config.BackupStorageConfig.BackupStorageUuid != "" {
+		createImageFromRootVolumeParam.Params.BackupStorageUuids = []string{config.BackupStorageConfig.BackupStorageUuid}
 	}
 
 	image, err := driver.CreateImage(config.RootVolumeUuid, createImageFromRootVolumeParam)
