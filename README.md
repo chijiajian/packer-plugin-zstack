@@ -19,12 +19,27 @@ To install this plugin, copy and paste this code into your Packer configuration.
 packer {
   required_plugins {
     zstack = {
-      version = ">= 1.0.0"
-      source  = "github.com/chijiajian/packer-plugin-zstack"
+      version = ">= 2.0.0"
+      source  = "github.com/zstackio/zstack"
     }
   }
 }
 ```
+
+## Quick Start
+
+The plugin supports two authentication methods:
+
+- Account/password authentication with `ZSTACK_HOST`, `ZSTACK_ACCOUNT_NAME`, and `ZSTACK_ACCOUNT_PASSWORD`
+- Access key/secret authentication with `ZSTACK_HOST`, `ZSTACK_ACCESS_KEY_ID`, and `ZSTACK_ACCESS_KEY_SECRET`
+
+You can build from resource names or use UUID passthrough with `image_uuid`, `network_uuid`, and `instance_offering_uuid` to skip name-based lookups.
+
+Optional backup storage settings let you export the resulting image when `backup_storage_name` or `backup_storage_uuid` is configured; if neither is set, the export step is skipped.
+
+Use `image_description` to set a custom description for the generated image.
+
+See the [`example/`](example) directory for ready-to-run HCL examples covering account/password auth, AK/SK auth, and UUID passthrough.
 
 ### Configuration
 
