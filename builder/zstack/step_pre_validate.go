@@ -32,8 +32,15 @@ func (s *StepPreValidate) Run(ctx context.Context, state multistep.StateBag) mul
 		ui.Say("L3 network validated")
 	}
 
+	// source_image_url imports require backup storage for image download/import.
+	if config.SourceImageUrl != "" && config.BackupStorageConfig.BackupStorageUuid == "" && config.BackupStorageConfig.BackupStorageName == "" {
+		err := fmt.Errorf("backup_storage_name or backup_storage_uuid is required when source_image_url is set")
+		ui.Errorf("Backup storage validation failed: %s", err)
+		return multistep.ActionHalt
+	}
+
 	// AC-002-04: Skip backup storage query when backup_storage_uuid is provided
-	// AC-003-01: Backup storage is now optional — skip if neither name nor UUID provided
+	// AC-003-01: Backup storage is optional for non-import flows.
 	if config.BackupStorageConfig.BackupStorageUuid != "" {
 		log.Printf("[INFO] Using provided backup storage UUID: %s", config.BackupStorageConfig.BackupStorageUuid)
 		ui.Say(fmt.Sprintf("Using provided backup storage UUID: %s", config.BackupStorageConfig.BackupStorageUuid))

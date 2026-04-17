@@ -118,6 +118,19 @@ func TestStepPreValidate_Run(t *testing.T) {
 			},
 		},
 		{
+			name: "SourceImageUrlRequiresBackupStorage",
+			config: &Config{
+				NetworkConfig: NetworkConfig{L3NetworkUuid: "network-uuid"},
+				ImageConfig:   ImageConfig{SourceImageUrl: "https://example.com/image.qcow2"},
+			},
+			driver:              &MockDriver{},
+			expectedAction:      multistep.ActionHalt,
+			expectedNetworkUUID: "network-uuid",
+			assertions: func(t *testing.T, driver *MockDriver) {
+				assert.False(t, driver.QueryBackStorageCalled)
+			},
+		},
+		{
 			name: "BackupStorageQueryError",
 			config: &Config{
 				NetworkConfig:       NetworkConfig{L3NetworkUuid: "network-uuid"},

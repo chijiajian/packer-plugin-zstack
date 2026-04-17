@@ -10,8 +10,8 @@ packer {
   required_plugins {
     zstack = {
       # source represents the GitHub URI to the plugin repository without the `packer-plugin-` prefix.
-      source  = "github.com/chijiajian/packer-plugin-zstack"
-      version = ">=1.0.0"
+      source  = "github.com/zstackio/zstack"
+      version = ">= 2.0.0"
     }
   }
 }
@@ -20,7 +20,7 @@ packer {
 Alternatively, you can use `packer plugins install` to manage installation of this plugin.
 
 ```sh
-$ packer plugins install github.com/chijiajian/packer-plugin-zstack
+$ packer plugins install github.com/zstackio/zstack
 ```
 
 ### Components
@@ -29,5 +29,4 @@ $ packer plugins install github.com/chijiajian/packer-plugin-zstack
 #### Builders
 
 - [builder](/packer/integrations/hashicorp/zstack/latest/components/builder/zstack) - Provides the capability to build customized images based on an existing ZStack VM instance.
-
 

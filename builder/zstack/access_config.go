@@ -28,6 +28,28 @@ func getEnvOrDefault(envVar string, defaultValue string) string {
 	return defaultValue
 }
 
+func (c *AccessConfig) applyEnvDefaults() {
+	c.Host = getEnvOrDefault("ZSTACK_HOST", c.Host)
+	c.Port, _ = strconv.Atoi(getEnvOrDefault("ZSTACK_PORT", strconv.Itoa(c.Port)))
+	c.AccountName = getEnvOrDefault("ZSTACK_ACCOUNT_NAME", c.AccountName)
+	c.AccountPassword = getEnvOrDefault("ZSTACK_ACCOUNT_PASSWORD", c.AccountPassword)
+	c.AccessKeyId = getEnvOrDefault("ZSTACK_ACCESS_KEY_ID", c.AccessKeyId)
+	c.AccessKeySecret = getEnvOrDefault("ZSTACK_ACCESS_KEY_SECRET", c.AccessKeySecret)
+}
+
+func (c *AccessConfig) validateCredentials() []error {
+	var errs []error
+	if c.Host == "" {
+		errs = append(errs, fmt.Errorf("host is required"))
+	}
+
+	if (c.AccountName == "" || c.AccountPassword == "") && (c.AccessKeyId == "" || c.AccessKeySecret == "") {
+		errs = append(errs, fmt.Errorf("either account_name + account_password or access_key_id + access_key_secret is required"))
+	}
+
+	return errs
+}
+
 func (c *AccessConfig) Prepare(raws ...interface{}) []error {
 	c.ctx = interpolate.Context{}
 
@@ -45,23 +67,9 @@ func (c *AccessConfig) Prepare(raws ...interface{}) []error {
 		errs = append(errs, err)
 	}
 
-	// PKR-001 Bug 3: Use standardized env var names (consistent with Terraform Provider)
-	c.Host = getEnvOrDefault("ZSTACK_HOST", c.Host)
-	c.Port, _ = strconv.Atoi(getEnvOrDefault("ZSTACK_PORT", strconv.Itoa(c.Port)))
-	c.AccountName = getEnvOrDefault("ZSTACK_ACCOUNT_NAME", c.AccountName)
-	c.AccountPassword = getEnvOrDefault("ZSTACK_ACCOUNT_PASSWORD", c.AccountPassword)
-	c.AccessKeyId = getEnvOrDefault("ZSTACK_ACCESS_KEY_ID", c.AccessKeyId)
-	c.AccessKeySecret = getEnvOrDefault("ZSTACK_ACCESS_KEY_SECRET", c.AccessKeySecret)
+	c.applyEnvDefaults()
+	errs = append(errs, c.validateCredentials()...)
 
-	if c.Host == "" {
-		errs = append(errs, fmt.Errorf("host is required"))
-	}
-
-	if (c.AccountName == "" || c.AccountPassword == "") && (c.AccessKeyId == "" || c.AccessKeySecret == "") {
-		errs = append(errs, fmt.Errorf("either account_name + account_password or access_key_id + access_key_secret is required"))
-	}
-
-	// PKR-001 Bug 2: Always return errs if non-empty (was returning nil when no decode error)
 	if len(errs) > 0 {
 		return errs
 	}
@@ -77,13 +85,13 @@ func (c *AccessConfig) CreateClient() (*client.ZSClient, error) {
 	}
 
 	if c.AccountName != "" && c.AccountPassword != "" {
-		cli = client.NewZSClient(client.NewZSConfig(c.Host, c.Port, "zstack").LoginAccount(c.AccountName, c.AccountPassword).ReadOnly(false).Debug(true))
+		cli = client.NewZSClient(client.NewZSConfig(c.Host, c.Port, "zstack").LoginAccount(c.AccountName, c.AccountPassword).ReadOnly(false).Debug(false))
 		_, err := cli.Login(context.Background())
 		if err != nil {
 			return nil, fmt.Errorf("unable to create ZStack API client: %s", err)
 		}
 	} else if c.AccessKeyId != "" && c.AccessKeySecret != "" {
-		cli = client.NewZSClient(client.NewZSConfig(c.Host, c.Port, "zstack").AccessKey(c.AccessKeyId, c.AccessKeySecret).ReadOnly(false).Debug(true))
+		cli = client.NewZSClient(client.NewZSConfig(c.Host, c.Port, "zstack").AccessKey(c.AccessKeyId, c.AccessKeySecret).ReadOnly(false).Debug(false))
 	}
 
 	if cli == nil {

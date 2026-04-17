@@ -43,8 +43,7 @@ func (b *Builder) Prepare(raws ...any) ([]string, []string, error) {
 
 func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook) (packersdk.Artifact, error) {
 	b.ui = ui
-	log.Printf("[DEBUG] Starting build with config: %+v", b.config)
-	log.Printf("[DEBUG] Starting Prepare method")
+	log.Printf("[DEBUG] Starting build with %s", b.config.RedactedSummary())
 
 	driver, err := b.config.AccessConfig.Driver()
 	if err != nil {
@@ -110,7 +109,7 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 
 	steps := append(baseSteps, remainingSteps...)
 
-	log.Printf("[DEBUG] Completed Pre Step with config: %+v", b.config)
+	log.Printf("[DEBUG] Build steps prepared with %s", b.config.RedactedSummary())
 
 	b.runner = commonsteps.NewRunner(steps, b.config.PackerConfig, ui)
 	b.runner.Run(ctx, state)
@@ -142,13 +141,6 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 		}
 		return nil, fmt.Errorf("unexpected error type in state: %T", rawErr)
 	}
-
-	/*
-		p, _ := state.GetOk("image_url")
-		if p == nil {
-			p = []string{}
-		}
-	*/
 
 	artifact := &Artifact{
 		config:    b.config,

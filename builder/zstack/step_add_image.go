@@ -35,16 +35,18 @@ func (s *StepAddImage) Run(ctx context.Context, state multistep.StateBag) multis
 	imageParam := param.AddImageParam{
 		BaseParam: param.BaseParam{},
 		Params: param.AddImageParamDetail{
-			Name:               config.SourceImage,
-			Description:        &description,
-			Url:                config.SourceImageUrl,
-			MediaType:          strPtr("RootVolumeTemplate"),
-			GuestOsType:        strPtr(config.GuestOsType),
-			System:             false,
-			Format:             strPtr(config.Format),
-			Platform:           strPtr(config.Platform),
-			BackupStorageUuids: []string{config.BackupStorageUuid},
+			Name:        config.SourceImage,
+			Description: &description,
+			Url:         config.SourceImageUrl,
+			MediaType:   strPtr("RootVolumeTemplate"),
+			GuestOsType: strPtr(config.GuestOsType),
+			System:      false,
+			Format:      strPtr(config.Format),
+			Platform:    strPtr(config.Platform),
 		},
+	}
+	if config.BackupStorageUuid != "" {
+		imageParam.Params.BackupStorageUuids = []string{config.BackupStorageUuid}
 	}
 
 	img, err := driver.AddImage(imageParam)

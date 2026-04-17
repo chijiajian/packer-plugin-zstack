@@ -2,8 +2,8 @@ package zstack
 
 import (
 	"errors"
+	"fmt"
 	"log"
-	"os"
 
 	"github.com/hashicorp/packer-plugin-sdk/common"
 	"github.com/hashicorp/packer-plugin-sdk/communicator"
@@ -68,6 +68,40 @@ type ExportImageResult struct {
 	Success  bool   `mapstructure:"export_image_result"`
 }
 
+func (c *Config) RedactedSummary() string {
+	authMode := "none"
+	switch {
+	case c.AccountName != "" || c.AccountPassword != "":
+		authMode = "account"
+	case c.AccessKeyId != "" || c.AccessKeySecret != "":
+		authMode = "access_key"
+	}
+
+	return fmt.Sprintf(
+		"host=%q auth_mode=%s communicator=%q image_name=%q source_image=%q source_image_url_set=%t instance_name=%q network_name=%q network_uuid_set=%t instance_offering_name=%q instance_offering_uuid_set=%t backup_storage_name=%q backup_storage_uuid_set=%t ssh_host=%q ssh_port=%d ssh_username=%q ssh_password_set=%t ssh_private_key_file_set=%t user_data_set=%t packer_debug=%t",
+		c.Host,
+		authMode,
+		c.Comm.Type,
+		c.ImageName,
+		c.SourceImage,
+		c.SourceImageUrl != "",
+		c.InstanceName,
+		c.L3NetworkName,
+		c.L3NetworkUuid != "",
+		c.InstanceOfferingName,
+		c.InstanceOfferingUuid != "",
+		c.BackupStorageName,
+		c.BackupStorageUuid != "",
+		c.Comm.SSHHost,
+		c.Comm.SSHPort,
+		c.Comm.SSHUsername,
+		c.Comm.SSHPassword != "",
+		c.Comm.SSHPrivateKeyFile != "",
+		c.UserData != "",
+		c.PackerDebug,
+	)
+}
+
 func (c *Config) Prepare(raws ...any) error {
 	err := config.Decode(c, &config.DecodeOpts{
 		Interpolate:        true,
@@ -80,28 +114,9 @@ func (c *Config) Prepare(raws ...any) error {
 
 	var errs *packersdk.MultiError
 
-	if c.Host == "" {
-		c.Host = os.Getenv("ZSTACK_HOST")
-	}
-
-	if c.AccessKeyId == "" {
-		c.AccessKeyId = os.Getenv("ZSTACK_ACCESS_KEY_ID")
-	}
-
-	if c.AccessKeySecret == "" {
-		c.AccessKeySecret = os.Getenv("ZSTACK_ACCESS_KEY_SECRET")
-	}
-
-	if c.AccountName == "" {
-		c.AccountName = os.Getenv("ZSTACK_ACCOUNT_NAME")
-	}
-
-	if c.AccountPassword == "" {
-		c.AccountPassword = os.Getenv("ZSTACK_ACCOUNT_PASSWORD")
-	}
-
-	if c.Host == "" {
-		errs = packersdk.MultiErrorAppend(errs, errors.New("host must be specified"))
+	c.AccessConfig.applyEnvDefaults()
+	for _, accessErr := range c.AccessConfig.validateCredentials() {
+		errs = packersdk.MultiErrorAppend(errs, accessErr)
 	}
 
 	if c.SourceImageUrl != "" {

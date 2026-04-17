@@ -44,7 +44,7 @@ func (s *StepCreateSSHKey) Run(ctx context.Context, state multistep.StateBag) mu
 		return multistep.ActionContinue
 	}
 
-	ui.Say("Createing temporary SSH key for instance...")
+	ui.Say("Creating temporary SSH key for instance...")
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		err := fmt.Errorf("error creating temporary ssh key: %s", err)

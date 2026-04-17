@@ -83,7 +83,12 @@ func (s *StepCreateVMInstance) Run(ctx context.Context, state multistep.StateBag
 
 	config.InstanceUuid = instance.UUID
 	config.RootVolumeUuid = instance.RootVolumeUuid
-	config.IP = instance.VmNics[0].Ip
+	if len(instance.VmNics) > 0 {
+		config.IP = instance.VmNics[0].Ip
+	} else {
+		ui.Error("Warning: VM instance has no network interfaces, SSH connection may fail")
+		log.Printf("[WARN] VM instance '%s' has no VmNics", instance.UUID)
+	}
 
 	state.Put("config", config)
 	log.Printf("[INFO] Successfully created VM instance (UUID: %s, IP: %s)", instance.UUID, config.IP)

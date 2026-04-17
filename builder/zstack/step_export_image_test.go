@@ -67,4 +67,21 @@ func TestStepExportImage_Run(t *testing.T) {
 		assert.True(t, ok)
 		assert.Equal(t, expectedErr, errVal)
 	})
+
+	t.Run("ExportImageUnsupportedBackupStorageTypeSkips", func(t *testing.T) {
+		expectedErr := errors.New("No service deals with message: APIExportImageFromBackupStorageMsg")
+		config := &Config{
+			ImageConfig:         ImageConfig{ImageUuid: "img-1"},
+			BackupStorageConfig: BackupStorageConfig{BackupStorageUuid: "bs-1"},
+		}
+		driver := &MockDriver{ExportImageErr: expectedErr}
+		state := testStateBag(config, driver)
+
+		action := (&StepExportImage{}).Run(context.Background(), state)
+
+		assert.Equal(t, multistep.ActionContinue, action)
+		assert.True(t, driver.ExportImageCalled)
+		_, ok := state.GetOk("error")
+		assert.False(t, ok)
+	})
 }

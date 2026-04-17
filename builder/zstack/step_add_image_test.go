@@ -107,4 +107,18 @@ func TestStepAddImage_Run(t *testing.T) {
 		assert.True(t, driver.AddImageCalled)
 		assert.Empty(t, config.ImageUuid)
 	})
+
+	t.Run("AddImageWithoutBackupStorageUuid", func(t *testing.T) {
+		config := newConfig()
+		config.BackupStorageUuid = ""
+		driver := &MockDriver{AddImageResult: &view.ImageInventoryView{BaseInfoView: view.BaseInfoView{UUID: "image-uuid"}}}
+		state := testStateBag(config, driver)
+
+		step := &StepAddImage{}
+		action := step.Run(context.Background(), state)
+
+		assert.Equal(t, multistep.ActionContinue, action)
+		assert.True(t, driver.AddImageCalled)
+		assert.Empty(t, driver.AddImageParam.Params.BackupStorageUuids)
+	})
 }

@@ -40,10 +40,20 @@ type FlatConfig struct {
 	BackupStorageName *string `mapstructure:"backup_storage_name" cty:"backup_storage_name" hcl:"backup_storage_name"`
 	BackupStorageUuid *string `mapstructure:"backup_storage_uuid" cty:"backup_storage_uuid" hcl:"backup_storage_uuid"`
 
-	SSHHost     *string `mapstructure:"ssh_host" cty:"ssh_host" hcl:"ssh_host"`
-	SSHPort     *int    `mapstructure:"ssh_port" cty:"ssh_port" hcl:"ssh_port"`
-	SSHUsername *string `mapstructure:"ssh_username" cty:"ssh_username" hcl:"ssh_username"`
-	SSHPassword *string `mapstructure:"ssh_password" cty:"ssh_password" hcl:"ssh_password"`
+	SSHHost                *string `mapstructure:"ssh_host" cty:"ssh_host" hcl:"ssh_host"`
+	SSHPort                *int    `mapstructure:"ssh_port" cty:"ssh_port" hcl:"ssh_port"`
+	SSHUsername            *string `mapstructure:"ssh_username" cty:"ssh_username" hcl:"ssh_username"`
+	SSHPassword            *string `mapstructure:"ssh_password" cty:"ssh_password" hcl:"ssh_password"`
+	SSHTimeout             *string `mapstructure:"ssh_timeout" cty:"ssh_timeout" hcl:"ssh_timeout"`
+	SSHHandshakeAttempts   *int    `mapstructure:"ssh_handshake_attempts" cty:"ssh_handshake_attempts" hcl:"ssh_handshake_attempts"`
+	SSHPrivateKeyFile      *string `mapstructure:"ssh_private_key_file" cty:"ssh_private_key_file" hcl:"ssh_private_key_file"`
+	SSHAgentAuth           *bool   `mapstructure:"ssh_agent_auth" cty:"ssh_agent_auth" hcl:"ssh_agent_auth"`
+	SSHKeepAliveInterval   *string `mapstructure:"ssh_keep_alive_interval" cty:"ssh_keep_alive_interval" hcl:"ssh_keep_alive_interval"`
+	SSHReadWriteTimeout    *string `mapstructure:"ssh_read_write_timeout" cty:"ssh_read_write_timeout" hcl:"ssh_read_write_timeout"`
+	Communicator           *string `mapstructure:"communicator" cty:"communicator" hcl:"communicator"`
+	WinRMUser              *string `mapstructure:"winrm_username" cty:"winrm_username" hcl:"winrm_username"`
+	WinRMPassword          *string `mapstructure:"winrm_password" cty:"winrm_password" hcl:"winrm_password"`
+	WinRMTimeout           *string `mapstructure:"winrm_timeout" cty:"winrm_timeout" hcl:"winrm_timeout"`
 
 	DebugMode *string `mapstructure:"debug_mode" cty:"debug_mode" hcl:"debug_mode"`
 }
@@ -88,10 +98,20 @@ func (*FlatConfig) HCL2Spec() map[string]hcldec.Spec {
 		"backup_storage_name": &hcldec.AttrSpec{Name: "backup_storage_name", Type: cty.String, Required: false},
 		"backup_storage_uuid": &hcldec.AttrSpec{Name: "backup_storage_uuid", Type: cty.String, Required: false},
 
-		"ssh_host":     &hcldec.AttrSpec{Name: "ssh_host", Type: cty.String, Required: false},
-		"ssh_port":     &hcldec.AttrSpec{Name: "ssh_port", Type: cty.Number, Required: false},
-		"ssh_username": &hcldec.AttrSpec{Name: "ssh_username", Type: cty.String, Required: false},
-		"ssh_password": &hcldec.AttrSpec{Name: "ssh_password", Type: cty.String, Required: false},
+		"ssh_host":               &hcldec.AttrSpec{Name: "ssh_host", Type: cty.String, Required: false},
+		"ssh_port":               &hcldec.AttrSpec{Name: "ssh_port", Type: cty.Number, Required: false},
+		"ssh_username":           &hcldec.AttrSpec{Name: "ssh_username", Type: cty.String, Required: false},
+		"ssh_password":           &hcldec.AttrSpec{Name: "ssh_password", Type: cty.String, Required: false},
+		"ssh_timeout":            &hcldec.AttrSpec{Name: "ssh_timeout", Type: cty.String, Required: false},
+		"ssh_handshake_attempts": &hcldec.AttrSpec{Name: "ssh_handshake_attempts", Type: cty.Number, Required: false},
+		"ssh_private_key_file":   &hcldec.AttrSpec{Name: "ssh_private_key_file", Type: cty.String, Required: false},
+		"ssh_agent_auth":         &hcldec.AttrSpec{Name: "ssh_agent_auth", Type: cty.Bool, Required: false},
+		"ssh_keep_alive_interval": &hcldec.AttrSpec{Name: "ssh_keep_alive_interval", Type: cty.String, Required: false},
+		"ssh_read_write_timeout":  &hcldec.AttrSpec{Name: "ssh_read_write_timeout", Type: cty.String, Required: false},
+		"communicator":           &hcldec.AttrSpec{Name: "communicator", Type: cty.String, Required: false},
+		"winrm_username":         &hcldec.AttrSpec{Name: "winrm_username", Type: cty.String, Required: false},
+		"winrm_password":         &hcldec.AttrSpec{Name: "winrm_password", Type: cty.String, Required: false},
+		"winrm_timeout":          &hcldec.AttrSpec{Name: "winrm_timeout", Type: cty.String, Required: false},
 
 		"debug_mode": &hcldec.AttrSpec{Name: "debug_mode", Type: cty.String, Required: false},
 	}
