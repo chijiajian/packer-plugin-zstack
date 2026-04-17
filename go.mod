@@ -1,15 +1,13 @@
 module github.com/zstackio/packer-plugin-zstack
 
-go 1.23.0
-
-toolchain go1.24.1
+go 1.25
 
 require (
 	github.com/hashicorp/hcl/v2 v2.19.1
 	github.com/hashicorp/packer-plugin-sdk v0.6.1
 	github.com/stretchr/testify v1.10.0
-	github.com/terraform-zstack-modules/zstack-sdk-go v1.0.1
 	github.com/zclconf/go-cty v1.13.3
+	github.com/zstackio/zstack-sdk-go-v2 v0.0.4
 	golang.org/x/crypto v0.36.0
 	golang.org/x/net v0.37.0
 )
@@ -38,7 +36,7 @@ require (
 	github.com/bgentry/go-netrc v0.0.0-20140422174119-9fd32a8b3d3d // indirect
 	github.com/cenkalti/backoff/v3 v3.2.2 // indirect
 	github.com/dylanmei/iso8601 v0.1.0 // indirect
-	github.com/fatih/color v1.16.0 // indirect
+	github.com/fatih/color v1.18.0 // indirect
 	github.com/fatih/structs v1.1.0 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/go-jose/go-jose/v4 v4.0.5 // indirect
@@ -73,8 +71,7 @@ require (
 	github.com/hashicorp/yamux v0.1.1 // indirect
 	github.com/jehiah/go-strftime v0.0.0-20171201141054-1d33003b3869 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
-	github.com/kataras/golog v0.1.7 // indirect
-	github.com/kataras/pio v0.0.10 // indirect
+	github.com/kataras/golog v0.1.15 // indirect
 	github.com/klauspost/compress v1.11.2 // indirect
 	github.com/kr/fs v0.1.0 // indirect
 	github.com/masterzen/simplexml v0.0.0-20190410153822-31eea3082786 // indirect
@@ -100,7 +97,7 @@ require (
 	//golang.org/x/net v0.25.0 // indirect
 	golang.org/x/oauth2 v0.13.0 // indirect
 	golang.org/x/sync v0.12.0 // indirect
-	golang.org/x/sys v0.31.0 // indirect
+	golang.org/x/sys v0.35.0 // indirect
 	golang.org/x/term v0.30.0 // indirect
 	golang.org/x/text v0.23.0 // indirect
 	golang.org/x/time v0.11.0 // indirect

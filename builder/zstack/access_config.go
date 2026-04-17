@@ -1,13 +1,14 @@
 package zstack
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strconv"
 
 	"github.com/hashicorp/packer-plugin-sdk/template/config"
 	"github.com/hashicorp/packer-plugin-sdk/template/interpolate"
-	"github.com/terraform-zstack-modules/zstack-sdk-go/pkg/client"
+	"github.com/zstackio/zstack-sdk-go-v2/pkg/client"
 )
 
 type AccessConfig struct {
@@ -27,11 +28,31 @@ func getEnvOrDefault(envVar string, defaultValue string) string {
 	return defaultValue
 }
 
+func (c *AccessConfig) applyEnvDefaults() {
+	c.Host = getEnvOrDefault("ZSTACK_HOST", c.Host)
+	c.Port, _ = strconv.Atoi(getEnvOrDefault("ZSTACK_PORT", strconv.Itoa(c.Port)))
+	c.AccountName = getEnvOrDefault("ZSTACK_ACCOUNT_NAME", c.AccountName)
+	c.AccountPassword = getEnvOrDefault("ZSTACK_ACCOUNT_PASSWORD", c.AccountPassword)
+	c.AccessKeyId = getEnvOrDefault("ZSTACK_ACCESS_KEY_ID", c.AccessKeyId)
+	c.AccessKeySecret = getEnvOrDefault("ZSTACK_ACCESS_KEY_SECRET", c.AccessKeySecret)
+}
+
+func (c *AccessConfig) validateCredentials() []error {
+	var errs []error
+	if c.Host == "" {
+		errs = append(errs, fmt.Errorf("host is required"))
+	}
+
+	if (c.AccountName == "" || c.AccountPassword == "") && (c.AccessKeyId == "" || c.AccessKeySecret == "") {
+		errs = append(errs, fmt.Errorf("either account_name + account_password or access_key_id + access_key_secret is required"))
+	}
+
+	return errs
+}
+
 func (c *AccessConfig) Prepare(raws ...interface{}) []error {
-	// Initialize the context
 	c.ctx = interpolate.Context{}
 
-	// Decode the configuration
 	var errs []error
 	err := config.Decode(c, &config.DecodeOpts{
 		Interpolate:        true,
@@ -46,23 +67,10 @@ func (c *AccessConfig) Prepare(raws ...interface{}) []error {
 		errs = append(errs, err)
 	}
 
-	c.Host = getEnvOrDefault("ZSTACK_HOST", c.Host)
-	c.Port, _ = strconv.Atoi(getEnvOrDefault("ZSTACK_PORT", strconv.Itoa(c.Port)))
-	c.AccountName = getEnvOrDefault("ZSTACK_ACCOUNTNAME", c.AccountName)
-	c.AccountPassword = getEnvOrDefault("ZSTACK_ACCOUNTPASSWORD", c.AccountPassword)
-	c.AccessKeyId = getEnvOrDefault("ZSTACK_ACCESSKEYID", c.AccessKeyId)
-	c.AccessKeySecret = getEnvOrDefault("ZSTACK_ACCESSKEYSECRET", c.AccessKeySecret)
+	c.applyEnvDefaults()
+	errs = append(errs, c.validateCredentials()...)
 
-	// Validate required fields
-	if c.Host == "" {
-		errs = append(errs, fmt.Errorf("host is required"))
-	}
-
-	if (c.AccountName == "" || c.AccountPassword == "") && (c.AccessKeyId == "" || c.AccessKeySecret == "") {
-		errs = append(errs, fmt.Errorf("either accountname + accountpassword or accesskeyid + accesskeysecret is required"))
-	}
-	if err != nil {
-
+	if len(errs) > 0 {
 		return errs
 	}
 	return nil
@@ -70,21 +78,22 @@ func (c *AccessConfig) Prepare(raws ...interface{}) []error {
 
 func (c *AccessConfig) CreateClient() (*client.ZSClient, error) {
 	var cli *client.ZSClient
-	var port = 8080
-	if c.Port != 8080 {
-		c.Port = port
+
+	// PKR-001 Bug 1: Only set default port when not specified (was overwriting custom port)
+	if c.Port == 0 {
+		c.Port = 8080
 	}
+
 	if c.AccountName != "" && c.AccountPassword != "" {
-		cli = client.NewZSClient(client.NewZSConfig(c.Host, c.Port, "zstack").LoginAccount(c.AccountName, c.AccountPassword).ReadOnly(false).Debug(true))
-		_, err := cli.Login()
+		cli = client.NewZSClient(client.NewZSConfig(c.Host, c.Port, "zstack").LoginAccount(c.AccountName, c.AccountPassword).ReadOnly(false).Debug(false))
+		_, err := cli.Login(context.Background())
 		if err != nil {
 			return nil, fmt.Errorf("unable to create ZStack API client: %s", err)
 		}
 	} else if c.AccessKeyId != "" && c.AccessKeySecret != "" {
-		cli = client.NewZSClient(client.NewZSConfig(c.Host, c.Port, "zstack").AccessKey(c.AccessKeyId, c.AccessKeySecret).ReadOnly(false).Debug(true))
+		cli = client.NewZSClient(client.NewZSConfig(c.Host, c.Port, "zstack").AccessKey(c.AccessKeyId, c.AccessKeySecret).ReadOnly(false).Debug(false))
 	}
 
-	// Check if client was created successfully
 	if cli == nil {
 		return nil, fmt.Errorf("failed to create ZStack client: client is nil")
 	}

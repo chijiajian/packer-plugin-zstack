@@ -3,10 +3,11 @@ package zstack
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
 	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
-	"github.com/terraform-zstack-modules/zstack-sdk-go/pkg/view"
+	"github.com/zstackio/zstack-sdk-go-v2/pkg/view"
 )
 
 type StepInstanceOfferingValidate struct {
@@ -15,17 +16,24 @@ type StepInstanceOfferingValidate struct {
 func (s *StepInstanceOfferingValidate) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {
 	ui := state.Get("ui").(packersdk.Ui)
 	config := state.Get("config").(*Config)
-	ui.Say("InstanceOffering  validate...")
+	ui.Say("Validating instance offering...")
+
+	// AC-002-03: Skip query when instance_offering_uuid is provided
+	if config.InstanceConfig.InstanceOfferingUuid != "" {
+		log.Printf("[INFO] Using provided instance offering UUID: %s", config.InstanceConfig.InstanceOfferingUuid)
+		ui.Say(fmt.Sprintf("Using provided instance offering UUID: %s", config.InstanceConfig.InstanceOfferingUuid))
+		state.Put("config", config)
+		return multistep.ActionContinue
+	}
 
 	instanceOfferings, err := validateInstanceOffering(state)
 	if err != nil {
-		ui.Errorf("Instance Offering validation failed: %s, pls using cpu_num and memory_size", err)
+		ui.Errorf("Instance offering validation failed: %s, please use cpu_num and memory_size instead", err)
 		return multistep.ActionHalt
 	}
 
 	config.InstanceConfig.InstanceOfferingUuid = instanceOfferings[0].UUID
-	ui.Say("instance offering validated")
-
+	ui.Say("Instance offering validated")
 	state.Put("config", config)
 	return multistep.ActionContinue
 }
@@ -36,13 +44,11 @@ func validateInstanceOffering(state multistep.StateBag) ([]view.InstanceOffering
 
 	instanceOffering, err := driver.QueryInstanceOffering(config.InstanceOfferingName)
 	if err != nil {
-		return nil, fmt.Errorf("error querying L3 Network: %s", err)
+		return nil, fmt.Errorf("error querying instance offering: %s", err)
 	}
-
-	if instanceOffering == nil {
-		return nil, fmt.Errorf("instanceOffering not found")
+	if len(instanceOffering) == 0 {
+		return nil, fmt.Errorf("instance offering '%s' not found", config.InstanceOfferingName)
 	}
-
 	return instanceOffering, nil
 }
 

@@ -22,7 +22,7 @@ type Builder struct {
 
 func (b *Builder) ConfigSpec() hcldec.ObjectSpec { return b.config.FlatMapstructure().HCL2Spec() }
 
-func (b *Builder) Prepare(raws ...interface{}) ([]string, []string, error) {
+func (b *Builder) Prepare(raws ...any) ([]string, []string, error) {
 
 	errs := b.config.Prepare(raws...)
 
@@ -43,8 +43,7 @@ func (b *Builder) Prepare(raws ...interface{}) ([]string, []string, error) {
 
 func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook) (packersdk.Artifact, error) {
 	b.ui = ui
-	log.Printf("[DEBUG] Starting build with config: %+v", b.config)
-	log.Printf("[DEBUG] Starting Prepare method")
+	log.Printf("[DEBUG] Starting build with %s", b.config.RedactedSummary())
 
 	driver, err := b.config.AccessConfig.Driver()
 	if err != nil {
@@ -74,14 +73,25 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 		baseSteps = append(baseSteps, imageSteps...)
 	}
 
-	if b.config.InstanceConfig.InstanceOfferingName != "" {
+	if b.config.InstanceConfig.InstanceOfferingName != "" || b.config.InstanceConfig.InstanceOfferingUuid != "" {
 		log.Printf("[DEBUG] InstanceOffering validate...")
 		instanceOfferingSteps := []multistep.Step{
 			&StepInstanceOfferingValidate{},
 		}
 		baseSteps = append(baseSteps, instanceOfferingSteps...)
 	}
-	remainingSteps := []multistep.Step{
+	remainingSteps := []multistep.Step{}
+
+	// AC-005-06: Only generate SSH key for SSH communicator
+	if b.config.Comm.Type == "ssh" {
+		remainingSteps = append(remainingSteps, &StepCreateSSHKey{
+			Password:     b.config.Comm.SSHPassword,
+			Debug:        b.config.PackerDebug,
+			DebugKeyPath: fmt.Sprintf("zstack_%s.pem", b.config.PackerBuildName),
+		})
+	}
+
+	remainingSteps = append(remainingSteps,
 		&StepCreateVMInstance{},
 		&StepWaitForRunning{},
 		&StepAttachGuestTools{},
@@ -95,11 +105,11 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 		&StepCreateImage{},
 		&StepExpungeVmInstance{},
 		&StepExportImage{},
-	}
+	)
 
 	steps := append(baseSteps, remainingSteps...)
 
-	log.Printf("[DEBUG] Completed Pre Step with config: %+v", b.config)
+	log.Printf("[DEBUG] Build steps prepared with %s", b.config.RedactedSummary())
 
 	b.runner = commonsteps.NewRunner(steps, b.config.PackerConfig, ui)
 	b.runner.Run(ctx, state)
@@ -113,7 +123,7 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 			}
 		case []string:
 			urls = val
-		case []interface{}:
+		case []any:
 			for _, item := range val {
 				if s, ok := item.(string); ok {
 					urls = append(urls, s)
@@ -131,13 +141,6 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 		}
 		return nil, fmt.Errorf("unexpected error type in state: %T", rawErr)
 	}
-
-	/*
-		p, _ := state.GetOk("image_url")
-		if p == nil {
-			p = []string{}
-		}
-	*/
 
 	artifact := &Artifact{
 		config:    b.config,

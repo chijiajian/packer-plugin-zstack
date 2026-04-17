@@ -37,10 +37,10 @@ func (s *StepAttachGuestTools) Run(ctx context.Context, state multistep.StateBag
 	log.Printf("[INFO] Attaching guest tools to VM '%s' (UUID: %s)", vm.Name, instanceUuid)
 
 	if err := driver.AttachGuestToolsToVm(instanceUuid); err != nil {
-		ui.Error(fmt.Sprintf("Failed to attach guest tools: %v", err))
-		log.Printf("[ERROR] Failed to attach guest tools to VM %s: %v", instanceUuid, err)
-		state.Put("error", err)
-		return multistep.ActionHalt
+		// Guest Tools is an enterprise feature — treat failure as non-fatal warning
+		ui.Say(fmt.Sprintf("Warning: failed to attach guest tools (non-fatal, skipping): %v", err))
+		log.Printf("[WARN] Failed to attach guest tools to VM %s: %v", instanceUuid, err)
+		return multistep.ActionContinue
 	}
 
 	ui.Say(fmt.Sprintf("Successfully attached guest tools to VM '%s'", vm.Name))

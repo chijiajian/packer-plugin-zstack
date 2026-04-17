@@ -2,6 +2,7 @@ package zstack
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
 	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
@@ -16,16 +17,19 @@ func (s *StepStopVmInstance) Run(ctx context.Context, state multistep.StateBag) 
 	driver := state.Get("driver").(Driver)
 
 	instanceUuid := config.InstanceUuid
+	ui.Say(fmt.Sprintf("Stopping VM instance '%s'...", instanceUuid))
 
 	vmInstance, err := driver.StopVminstance(instanceUuid)
 
-	ui.Say("stop vm instances..." + instanceUuid)
-
 	if err != nil {
-		ui.Say("failt to stop  vm instance")
+		// AC-004-03: Write error to state so Cleanup can detect failure
+		err = fmt.Errorf("failed to stop VM instance '%s': %v", instanceUuid, err)
+		ui.Error(err.Error())
+		state.Put("error", err)
 		return multistep.ActionHalt
 	}
-	ui.Say("stopped... " + vmInstance.Name)
+
+	ui.Say(fmt.Sprintf("Successfully stopped VM instance '%s'", vmInstance.Name))
 	return multistep.ActionContinue
 }
 

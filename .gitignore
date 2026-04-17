@@ -7,3 +7,32 @@ crash.log
 dist/*
 .docs/*
 docs.zip
+settings.local.json
+.claude/settings.local.json
+.sysyhus/**
+.sisyphus/**
+docs/stories/**
+docs/epic-automation_iac.md
+example/local-dev.pkr.hcl
+
+# local/private config
+.env
+.env.*
+!.env.example
+!.env.sample
+
+.zstack_smoke
+
+# editor/system local files
+.DS_Store
+.vscode/settings.json
+
+# private keys/certs
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.kubeconfig
+
+

@@ -7,7 +7,7 @@ import (
 
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
 	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
-	"github.com/terraform-zstack-modules/zstack-sdk-go/pkg/param"
+	"github.com/zstackio/zstack-sdk-go-v2/pkg/param"
 )
 
 type StepCreateImage struct {
@@ -21,18 +21,25 @@ func (s *StepCreateImage) Run(ctx context.Context, state multistep.StateBag) mul
 	ui.Say(fmt.Sprintf("Creating image '%s' from VM root volume...", config.ImageName))
 	log.Printf("[INFO] Starting image creation from root volume: %s", config.RootVolumeUuid)
 
-	//rootVolumeUuid := config.RootVolumeUuid
+	description := config.ImageDescription
+	if description == "" {
+		description = "Auto created by packer-plugin-zstack"
+	}
+
 	createImageFromRootVolumeParam := param.CreateRootVolumeTemplateFromRootVolumeParam{
-		BaseParam:      param.BaseParam{},
-		RootVolumeUuid: config.RootVolumeUuid,
-		Params: param.CreateRootVolumeTemplateFromRootVolumeDetailParam{
-			Name:               config.ImageName,
-			Description:        "Auto created by packer-plugin-zstack",
-			BackupStorageUuids: []string{config.BackupStorageConfig.BackupStorageUuid},
+		BaseParam: param.BaseParam{},
+		Params: param.CreateRootVolumeTemplateFromRootVolumeParamDetail{
+			Name:        config.ImageName,
+			Description: &description,
 		},
 	}
 
-	image, err := driver.CreateImage(createImageFromRootVolumeParam)
+	// AC-003-03: Only include BackupStorageUuids when configured
+	if config.BackupStorageConfig.BackupStorageUuid != "" {
+		createImageFromRootVolumeParam.Params.BackupStorageUuids = []string{config.BackupStorageConfig.BackupStorageUuid}
+	}
+
+	image, err := driver.CreateImage(config.RootVolumeUuid, createImageFromRootVolumeParam)
 	if err != nil {
 		ui.Error(fmt.Sprintf("Failed to create image: %v", err))
 		log.Printf("[ERROR] Failed to create image: %v", err)
