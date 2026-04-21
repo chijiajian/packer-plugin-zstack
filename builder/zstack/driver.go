@@ -36,11 +36,15 @@ type Driver interface {
 
 	CreateImage(rootVolumeUuid string, params param.CreateRootVolumeTemplateFromRootVolumeParam) (*view.ImageInventoryView, error)
 	AddImage(param param.AddImageParam) (*view.ImageInventoryView, error)
+	DeleteImage(uuid string) error
+	ExpungeImage(uuid string) error
 	CreateDataVolume(volume param.CreateDataVolumeParam) (*view.VolumeInventoryView, error)
 	ExportImage(backupStorageUuid string, params param.ExportImageFromBackupStorageParam) (*view.ExportImageFromBackupStorageEventView, error)
 
 	AttachGuestToolsToVm(vmUuid string) error
 	AttachDataVolumeToVm(vmUuid, volumeUuid string) (*view.VolumeInventoryView, error)
+
+	ValidateCredentials() error
 }
 
 func (d *ZStackDriver) GetBackupStorage(uuid string) (*view.BackupStorageInventoryView, error) {
@@ -218,6 +222,30 @@ func (d *ZStackDriver) AddImage(image param.AddImageParam) (*view.ImageInventory
 	return img, nil
 }
 
+func (d *ZStackDriver) DeleteImage(uuid string) error {
+	log.Printf("[INFO] Deleting image '%s'", uuid)
+	if err := d.client.DeleteImage(uuid, param.DeleteModePermissive); err != nil {
+		return fmt.Errorf("failed to delete image '%s': %v", uuid, err)
+	}
+	return nil
+}
+
+func (d *ZStackDriver) ExpungeImage(uuid string) error {
+	log.Printf("[INFO] Expunging image '%s'", uuid)
+	if err := d.client.ExpungeImage(uuid); err != nil {
+		return fmt.Errorf("failed to expunge image '%s': %v", uuid, err)
+	}
+	return nil
+}
+
+func (d *ZStackDriver) ValidateCredentials() error {
+	params := param.NewQueryParam()
+	if _, err := d.client.QueryZone(&params); err != nil {
+		return fmt.Errorf("credentials validation failed: %v", err)
+	}
+	return nil
+}
+
 func (d *ZStackDriver) ExportImage(backupStorageUuid string, params param.ExportImageFromBackupStorageParam) (*view.ExportImageFromBackupStorageEventView, error) {
 	log.Printf("[INFO] Exporting image from backup storage '%s'", backupStorageUuid)
 	exportedImg, err := d.client.ExportImageFromBackupStorage(backupStorageUuid, params)
@@ -290,6 +318,5 @@ func (d *ZStackDriver) WaitForSSH(vmUuid string, sshPort int, timeout time.Durat
 }
 
 func addSystemTags(tags []string, args ...string) []string {
-	tags = append(tags, args...)
-	return tags
+	return append(tags, args...)
 }

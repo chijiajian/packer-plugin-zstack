@@ -25,8 +25,8 @@ func (s *StepWaitForRunning) Run(ctx context.Context, state multistep.StateBag) 
 
 	ui.Say("Waiting for VM instance to become running...")
 
-	timeout := time.After(5 * time.Minute)
-	ticker := time.NewTicker(5 * time.Second)
+	timeout := time.After(config.VmRunningTimeout())
+	ticker := time.NewTicker(config.PollInterval())
 	defer ticker.Stop()
 
 	for {
@@ -34,13 +34,13 @@ func (s *StepWaitForRunning) Run(ctx context.Context, state multistep.StateBag) 
 		case <-timeout:
 			err := fmt.Errorf("timeout waiting for instance %s to become running", config.InstanceUuid)
 			state.Put("error", err)
-			ui.Errorf(err.Error())
+			ui.Error(err.Error())
 			return multistep.ActionHalt
 		case <-ticker.C:
 			instance, err := driver.GetVmInstance(config.InstanceUuid)
 			if err != nil {
 				state.Put("error", err)
-				ui.Errorf("Failed to get VM instance: %v", err)
+				ui.Error(fmt.Sprintf("Failed to get VM instance: %v", err))
 				return multistep.ActionHalt
 			}
 
@@ -57,6 +57,4 @@ func (s *StepWaitForRunning) Run(ctx context.Context, state multistep.StateBag) 
 	}
 }
 
-func (s *StepWaitForRunning) Cleanup(state multistep.StateBag) {
-
-}
+func (s *StepWaitForRunning) Cleanup(state multistep.StateBag) {}

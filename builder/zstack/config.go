@@ -4,12 +4,18 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/hashicorp/packer-plugin-sdk/common"
 	"github.com/hashicorp/packer-plugin-sdk/communicator"
 	"github.com/hashicorp/packer-plugin-sdk/multistep/commonsteps"
 	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
 	"github.com/hashicorp/packer-plugin-sdk/template/config"
+)
+
+const (
+	defaultImageReadyTimeout = 5 * time.Minute
+	defaultVmRunningTimeout  = 5 * time.Minute
 )
 
 type Config struct {
@@ -24,7 +30,36 @@ type Config struct {
 
 	BackupStorageConfig `mapstructure:",squash"`
 	ExportImageResult   `mapstructure:",squash"`
-	DebugMode           string `mapstructure:"debug_mode"`
+
+	CleanTraffic           bool   `mapstructure:"clean_traffic"`
+	ImageReadyTimeoutRaw   string `mapstructure:"image_ready_timeout"`
+	VmRunningTimeoutRaw    string `mapstructure:"vm_running_timeout"`
+
+	imageReadyTimeout time.Duration
+	vmRunningTimeout  time.Duration
+
+	pollInterval time.Duration
+}
+
+func (c *Config) PollInterval() time.Duration {
+	if c.pollInterval > 0 {
+		return c.pollInterval
+	}
+	return 5 * time.Second
+}
+
+func (c *Config) ImageReadyTimeout() time.Duration {
+	if c.imageReadyTimeout > 0 {
+		return c.imageReadyTimeout
+	}
+	return defaultImageReadyTimeout
+}
+
+func (c *Config) VmRunningTimeout() time.Duration {
+	if c.vmRunningTimeout > 0 {
+		return c.vmRunningTimeout
+	}
+	return defaultVmRunningTimeout
 }
 
 type ImageConfig struct {
@@ -55,7 +90,6 @@ type InstanceConfig struct {
 	IP                   string `mapstructure:"ip"`
 	CPUNum               int64  `mapstructure:"cpu_num"`
 	MemorySize           int64  `mapstructure:"memory_size"`
-	//DiskSize             int64  `mapstructure:"disk_size"`
 }
 
 type BackupStorageConfig struct {
@@ -131,6 +165,27 @@ func (c *Config) Prepare(raws ...any) error {
 		}
 		if c.SourceImage == "" {
 			errs = packersdk.MultiErrorAppend(errs, errors.New("source image name must be specified when using source_image_url"))
+		}
+	}
+
+	if c.ImageReadyTimeoutRaw != "" {
+		d, err := time.ParseDuration(c.ImageReadyTimeoutRaw)
+		if err != nil {
+			errs = packersdk.MultiErrorAppend(errs, fmt.Errorf("image_ready_timeout is invalid: %v", err))
+		} else if d <= 0 {
+			errs = packersdk.MultiErrorAppend(errs, errors.New("image_ready_timeout must be positive"))
+		} else {
+			c.imageReadyTimeout = d
+		}
+	}
+	if c.VmRunningTimeoutRaw != "" {
+		d, err := time.ParseDuration(c.VmRunningTimeoutRaw)
+		if err != nil {
+			errs = packersdk.MultiErrorAppend(errs, fmt.Errorf("vm_running_timeout is invalid: %v", err))
+		} else if d <= 0 {
+			errs = packersdk.MultiErrorAppend(errs, errors.New("vm_running_timeout must be positive"))
+		} else {
+			c.vmRunningTimeout = d
 		}
 	}
 
