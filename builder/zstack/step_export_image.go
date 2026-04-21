@@ -9,9 +9,14 @@ import (
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
 	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
 	"github.com/zstackio/zstack-sdk-go-v2/pkg/param"
+	"github.com/zstackio/zstack-sdk-go-v2/pkg/view"
 )
 
-type StepExportImage struct {
+type StepExportImage struct{}
+
+type exportImageResult struct {
+	view *view.ExportImageFromBackupStorageEventView
+	err  error
 }
 
 func (s *StepExportImage) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {
@@ -41,21 +46,36 @@ func (s *StepExportImage) Run(ctx context.Context, state multistep.StateBag) mul
 		},
 	}
 
-	exportImageResult, err := driver.ExportImage(config.BackupStorageUuid, exportImageParam)
-	if err != nil {
-		// Some backup storage types don't implement export API; skip instead of failing the whole build.
-		if isUnsupportedExportError(err) {
-			msg := fmt.Sprintf("Skipping image export: backup storage may not support export (%v)", err)
+	resultCh := make(chan exportImageResult, 1)
+	go func() {
+		res, err := driver.ExportImage(config.BackupStorageUuid, exportImageParam)
+		resultCh <- exportImageResult{view: res, err: err}
+	}()
+
+	var res exportImageResult
+	select {
+	case <-ctx.Done():
+		ui.Say("Export cancelled; waiting for in-flight ZStack call to return")
+		log.Printf("[INFO] Context cancelled during image export; waiting for SDK call to finish")
+		res = <-resultCh
+		state.Put("error", ctx.Err())
+		return multistep.ActionHalt
+	case res = <-resultCh:
+	}
+
+	if res.err != nil {
+		if isUnsupportedExportError(res.err) {
+			msg := fmt.Sprintf("Skipping image export: backup storage may not support export (%v)", res.err)
 			log.Printf("[WARN] %s", msg)
 			ui.Say(msg)
 			return multistep.ActionContinue
 		}
-		ui.Error("Failed to export image: " + err.Error())
-		state.Put("error", err)
+		ui.Error("Failed to export image: " + res.err.Error())
+		state.Put("error", res.err)
 		return multistep.ActionHalt
 	}
 
-	config.ImageUrl = exportImageResult.ImageUrl
+	config.ImageUrl = res.view.ImageUrl
 	state.Put("config", config)
 	ui.Say("Successfully exported image: " + config.ImageUrl)
 	return multistep.ActionContinue

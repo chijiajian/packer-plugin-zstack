@@ -92,6 +92,17 @@ type MockDriver struct {
 	AddImageCalled bool
 	AddImageParam  param.AddImageParam
 
+	DeleteImageErr    error
+	DeleteImageCalled bool
+	DeleteImageUuid   string
+
+	ExpungeImageErr    error
+	ExpungeImageCalled bool
+	ExpungeImageUuid   string
+
+	ValidateCredentialsErr    error
+	ValidateCredentialsCalled bool
+
 	CreateDataVolumeResult *view.VolumeInventoryView
 	CreateDataVolumeErr    error
 	CreateDataVolumeCalled bool
@@ -198,6 +209,20 @@ func (m *MockDriver) AddImage(p param.AddImageParam) (*view.ImageInventoryView, 
 	m.AddImageCalled = true
 	m.AddImageParam = p
 	return m.AddImageResult, m.AddImageErr
+}
+func (m *MockDriver) DeleteImage(uuid string) error {
+	m.DeleteImageCalled = true
+	m.DeleteImageUuid = uuid
+	return m.DeleteImageErr
+}
+func (m *MockDriver) ExpungeImage(uuid string) error {
+	m.ExpungeImageCalled = true
+	m.ExpungeImageUuid = uuid
+	return m.ExpungeImageErr
+}
+func (m *MockDriver) ValidateCredentials() error {
+	m.ValidateCredentialsCalled = true
+	return m.ValidateCredentialsErr
 }
 func (m *MockDriver) CreateDataVolume(volume param.CreateDataVolumeParam) (*view.VolumeInventoryView, error) {
 	m.CreateDataVolumeCalled = true

@@ -60,7 +60,7 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 		&StepPreValidate{},
 	}
 
-	if b.config.SourceImageUrl != "" && b.config.Format != "" && b.config.Platform != "" {
+	if b.config.SourceImageUrl != "" {
 		imageSteps := []multistep.Step{
 			&StepAddImage{},
 			&StepWaitForImageReady{},
@@ -145,6 +145,7 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 	artifact := &Artifact{
 		config:    b.config,
 		exportUrl: urls,
+		driver:    driver,
 	}
 	return artifact, nil
 }

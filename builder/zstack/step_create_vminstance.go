@@ -1,6 +1,7 @@
 package zstack
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"log"
@@ -10,12 +11,9 @@ import (
 	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
 	"github.com/zstackio/packer-plugin-zstack/builder/zstack/utils"
 	"github.com/zstackio/zstack-sdk-go-v2/pkg/param"
-	"golang.org/x/net/context"
 )
 
-type StepCreateVMInstance struct {
-	//vm *view.VmInstanceInventoryView
-}
+type StepCreateVMInstance struct{}
 
 func strPtr(s string) *string {
 	return &s
@@ -29,23 +27,12 @@ func (s *StepCreateVMInstance) Run(ctx context.Context, state multistep.StateBag
 	ui.Say(fmt.Sprintf("Creating VM instance '%s'...", config.InstanceName))
 
 	var systemtags []string
-	systemtags = addSystemTags(systemtags, "cdroms::Empty::None::None", "cleanTraffic::false")
+	systemtags = append(systemtags, "cdroms::Empty::None::None", fmt.Sprintf("cleanTraffic::%t", config.CleanTraffic))
 	if config.SshKey != "" {
-		systemtags = addSystemTags(systemtags, fmt.Sprintf("sshkey::%s", config.SshKey))
+		systemtags = append(systemtags, fmt.Sprintf("sshkey::%s", config.SshKey))
 	}
 	if config.UserData != "" {
-		userData := strings.TrimSpace(config.UserData)
-		/*
-			if userData[len(userData)-1] == '\n' {
-				userData = userData[:len(userData)-1]
-			}
-		*/
-		if _, err := base64.StdEncoding.DecodeString(userData); err != nil {
-			//log.Printf("[DEBUG] base64 encoding user data...")
-			userData = base64.StdEncoding.EncodeToString([]byte(userData))
-		}
-		//log.Printf("[DEBUG] userdata: %s", userData)
-		systemtags = addSystemTags(systemtags, fmt.Sprintf("userdata::%s", userData))
+		systemtags = append(systemtags, fmt.Sprintf("userdata::%s", encodeUserData(config.UserData)))
 	}
 
 	createVmInstanceParam := param.CreateVmInstanceParam{
@@ -83,12 +70,14 @@ func (s *StepCreateVMInstance) Run(ctx context.Context, state multistep.StateBag
 
 	config.InstanceUuid = instance.UUID
 	config.RootVolumeUuid = instance.RootVolumeUuid
-	if len(instance.VmNics) > 0 {
-		config.IP = instance.VmNics[0].Ip
-	} else {
-		ui.Error("Warning: VM instance has no network interfaces, SSH connection may fail")
-		log.Printf("[WARN] VM instance '%s' has no VmNics", instance.UUID)
+	if len(instance.VmNics) == 0 || instance.VmNics[0].Ip == "" {
+		err := fmt.Errorf("VM instance '%s' has no usable network interface; cannot proceed", instance.UUID)
+		ui.Error(err.Error())
+		log.Printf("[ERROR] %v", err)
+		state.Put("error", err)
+		return multistep.ActionHalt
 	}
+	config.IP = instance.VmNics[0].Ip
 
 	state.Put("config", config)
 	log.Printf("[INFO] Successfully created VM instance (UUID: %s, IP: %s)", instance.UUID, config.IP)
@@ -113,12 +102,10 @@ func (s *StepCreateVMInstance) Cleanup(state multistep.StateBag) {
 	ui := state.Get("ui").(packersdk.Ui)
 	driver := state.Get("driver").(Driver)
 
-	// AC-004-04: Log cleanup action
 	ui.Say("Cleaning up: destroying temporary VM instance...")
 	log.Printf("[INFO] Cleaning up VM instance '%s' after build failure", config.InstanceUuid)
 
 	if err := driver.DestroyVmInstance(config.InstanceUuid); err != nil {
-		// AC-004-05: Cleanup failure logs warning, doesn't panic
 		log.Printf("[WARN] Failed to destroy VM instance during cleanup: %v", err)
 		ui.Error(fmt.Sprintf("Warning: failed to destroy VM instance during cleanup: %v", err))
 		return
@@ -132,4 +119,11 @@ func (s *StepCreateVMInstance) Cleanup(state multistep.StateBag) {
 
 	log.Printf("[INFO] Successfully cleaned up VM instance '%s'", config.InstanceUuid)
 	ui.Say("Successfully cleaned up temporary VM instance")
+}
+
+// encodeUserData returns the user data as base64. Input is always treated as
+// plaintext. Callers that already hold base64-encoded content must decode it
+// before passing it in.
+func encodeUserData(raw string) string {
+	return base64.StdEncoding.EncodeToString([]byte(strings.TrimSpace(raw)))
 }

@@ -3,6 +3,7 @@ package zstack
 import (
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -61,6 +62,63 @@ func TestBuilderPrepare_ValidatesMissingAuth(t *testing.T) {
 	if assert.Error(t, err) {
 		assert.Contains(t, err.Error(), "either account_name + account_password or access_key_id + access_key_secret is required")
 	}
+}
+
+func TestBuilderPrepare_InvalidImageReadyTimeout(t *testing.T) {
+	restore := preserveZStackEnvVars()
+	defer restore()
+
+	clearZStackEnvVars()
+
+	var b Builder
+	_, _, err := b.Prepare(map[string]interface{}{
+		"communicator":        "none",
+		"zstack_host":         "example.com",
+		"account_name":        "admin",
+		"account_password":    "pw",
+		"image_ready_timeout": "not-a-duration",
+	})
+
+	if assert.Error(t, err) {
+		assert.Contains(t, err.Error(), "image_ready_timeout")
+	}
+}
+
+func TestBuilderPrepare_ValidTimeouts(t *testing.T) {
+	restore := preserveZStackEnvVars()
+	defer restore()
+
+	clearZStackEnvVars()
+
+	var b Builder
+	_, _, err := b.Prepare(map[string]interface{}{
+		"communicator":        "none",
+		"zstack_host":         "example.com",
+		"account_name":        "admin",
+		"account_password":    "pw",
+		"image_ready_timeout": "10m",
+		"vm_running_timeout":  "2m",
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, 10*time.Minute, b.config.ImageReadyTimeout())
+	assert.Equal(t, 2*time.Minute, b.config.VmRunningTimeout())
+}
+
+func TestCommHost_ReturnsProvidedSshHost(t *testing.T) {
+	state := testStateBag(&Config{}, &MockDriver{})
+	fn := commHost("10.0.0.5")
+	ip, err := fn(state)
+	assert.NoError(t, err)
+	assert.Equal(t, "10.0.0.5", ip)
+}
+
+func TestCommHost_FallsBackToConfigIP(t *testing.T) {
+	config := &Config{InstanceConfig: InstanceConfig{IP: "192.168.1.10"}}
+	state := testStateBag(config, &MockDriver{})
+	fn := commHost("")
+	ip, err := fn(state)
+	assert.NoError(t, err)
+	assert.Equal(t, "192.168.1.10", ip)
 }
 
 func TestConfigRedactedSummary_DoesNotLeakSecrets(t *testing.T) {

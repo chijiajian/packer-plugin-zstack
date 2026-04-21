@@ -1,12 +1,12 @@
 package zstack
 
 import (
+	"context"
 	"fmt"
 	"log"
 
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
 	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
-	"golang.org/x/net/context"
 )
 
 type StepAttachGuestTools struct {

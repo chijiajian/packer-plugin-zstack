@@ -26,8 +26,8 @@ func (s *StepWaitForImageReady) Run(ctx context.Context, state multistep.StateBa
 
 	ui.Say("Waiting for image status to become ready...")
 
-	timeout := time.After(5 * time.Minute)
-	ticker := time.NewTicker(5 * time.Second)
+	timeout := time.After(config.ImageReadyTimeout())
+	ticker := time.NewTicker(config.PollInterval())
 	defer ticker.Stop()
 
 	for {
@@ -35,13 +35,13 @@ func (s *StepWaitForImageReady) Run(ctx context.Context, state multistep.StateBa
 		case <-timeout:
 			err := fmt.Errorf("timeout waiting for image %s status to become ready", config.ImageUuid)
 			state.Put("error", err)
-			ui.Errorf(err.Error())
+			ui.Error(err.Error())
 			log.Printf("[ERROR] %v", err)
 			return multistep.ActionHalt
 		case <-ticker.C:
 			image, err := driver.GetImage(config.ImageUuid)
 			if err != nil {
-				ui.Errorf(err.Error())
+				ui.Error(err.Error())
 				log.Printf("[ERROR] Failed to get image %s: %v", config.ImageUuid, err)
 				state.Put("error", err)
 				return multistep.ActionHalt
@@ -62,6 +62,4 @@ func (s *StepWaitForImageReady) Run(ctx context.Context, state multistep.StateBa
 	}
 }
 
-func (s *StepWaitForImageReady) Cleanup(state multistep.StateBag) {
-
-}
+func (s *StepWaitForImageReady) Cleanup(state multistep.StateBag) {}

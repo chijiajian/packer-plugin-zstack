@@ -16,7 +16,6 @@ import (
 
 type StepCreateSSHKey struct {
 	Password     string
-	Publicfile   string
 	Debug        bool
 	DebugKeyPath string
 }
@@ -24,7 +23,6 @@ type StepCreateSSHKey struct {
 func (s *StepCreateSSHKey) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {
 	ui := state.Get("ui").(packersdk.Ui)
 	config := state.Get("config").(*Config)
-	//driver := state.Get("driver").(Driver)
 	ui.Say("start create sshkey for zstack")
 
 	if s.Password != "" {
@@ -78,7 +76,7 @@ func (s *StepCreateSSHKey) Run(ctx context.Context, state multistep.StateBag) mu
 
 	if s.Debug {
 		ui.Message(fmt.Sprintf("Saving key for debug purposes: %s", s.DebugKeyPath))
-		f, err := os.Create(s.DebugKeyPath)
+		f, err := os.OpenFile(s.DebugKeyPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 		if err != nil {
 			state.Put("error", fmt.Errorf("error saving debug key: %s", err))
 			return multistep.ActionHalt

@@ -91,3 +91,35 @@ func TestStepCreateSSHKey_Cleanup(t *testing.T) {
 		step.Cleanup(state)
 	})
 }
+
+func TestStepCreateSSHKey_DebugWritesKeyFileWithTightPermissions(t *testing.T) {
+	dir := t.TempDir()
+	keyPath := dir + "/debug.pem"
+
+	config := &Config{}
+	state := testStateBag(config, &MockDriver{})
+
+	step := &StepCreateSSHKey{Debug: true, DebugKeyPath: keyPath}
+	action := step.Run(context.Background(), state)
+
+	assert.Equal(t, multistep.ActionContinue, action)
+	info, err := os.Stat(keyPath)
+	assert.NoError(t, err)
+	// On Unix, verify 0600 permissions. On other platforms the bits may
+	// differ but the file must exist.
+	mode := info.Mode().Perm()
+	assert.Equal(t, os.FileMode(0600), mode, "debug key file should be 0600, got %o", mode)
+}
+
+func TestStepCreateSSHKey_DebugUnwritablePathHalts(t *testing.T) {
+	config := &Config{}
+	state := testStateBag(config, &MockDriver{})
+
+	// Directory that does not exist → OpenFile fails.
+	step := &StepCreateSSHKey{Debug: true, DebugKeyPath: "/no/such/dir/debug.pem"}
+	action := step.Run(context.Background(), state)
+
+	assert.Equal(t, multistep.ActionHalt, action)
+	_, ok := state.GetOk("error")
+	assert.True(t, ok)
+}

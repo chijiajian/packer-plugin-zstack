@@ -161,3 +161,80 @@ func TestStepCreateVMInstance_Cleanup(t *testing.T) {
 		assert.False(t, driver.DeleteVmInstanceCalled)
 	})
 }
+
+func TestStepCreateVMInstance_NoNIC_Halts(t *testing.T) {
+	config := &Config{
+		ImageConfig:   ImageConfig{ImageUuid: "img-1"},
+		NetworkConfig: NetworkConfig{L3NetworkUuid: "l3-1"},
+		InstanceConfig: InstanceConfig{
+			InstanceName:         "vm-1",
+			InstanceOfferingUuid: "offering-1",
+		},
+	}
+	driver := &MockDriver{CreateVmInstanceResult: &view.VmInstanceInventoryView{
+		BaseInfoView: view.BaseInfoView{UUID: "vm-uuid-1"},
+		VmNics:       nil,
+	}}
+	state := testStateBag(config, driver)
+
+	action := (&StepCreateVMInstance{}).Run(context.Background(), state)
+
+	assert.Equal(t, multistep.ActionHalt, action)
+	errVal, ok := state.GetOk("error")
+	assert.True(t, ok)
+	assert.Contains(t, errVal.(error).Error(), "no usable network interface")
+}
+
+func TestStepCreateVMInstance_CleanTrafficTag(t *testing.T) {
+	t.Run("DefaultFalse", func(t *testing.T) {
+		config := &Config{
+			ImageConfig:    ImageConfig{ImageUuid: "img-1"},
+			NetworkConfig:  NetworkConfig{L3NetworkUuid: "l3-1"},
+			InstanceConfig: InstanceConfig{InstanceName: "vm-1", InstanceOfferingUuid: "o-1"},
+		}
+		driver := &MockDriver{CreateVmInstanceResult: &view.VmInstanceInventoryView{
+			BaseInfoView: view.BaseInfoView{UUID: "vm-uuid-1"},
+			VmNics:       []view.VmNicInventoryView{{Ip: "192.168.0.10"}},
+		}}
+		state := testStateBag(config, driver)
+
+		(&StepCreateVMInstance{}).Run(context.Background(), state)
+		assert.Contains(t, driver.CreateVmInstanceParam.BaseParam.SystemTags, "cleanTraffic::false")
+	})
+	t.Run("TrueWhenConfigured", func(t *testing.T) {
+		config := &Config{
+			ImageConfig:    ImageConfig{ImageUuid: "img-1"},
+			NetworkConfig:  NetworkConfig{L3NetworkUuid: "l3-1"},
+			InstanceConfig: InstanceConfig{InstanceName: "vm-1", InstanceOfferingUuid: "o-1"},
+			CleanTraffic:   true,
+		}
+		driver := &MockDriver{CreateVmInstanceResult: &view.VmInstanceInventoryView{
+			BaseInfoView: view.BaseInfoView{UUID: "vm-uuid-1"},
+			VmNics:       []view.VmNicInventoryView{{Ip: "192.168.0.10"}},
+		}}
+		state := testStateBag(config, driver)
+
+		(&StepCreateVMInstance{}).Run(context.Background(), state)
+		assert.Contains(t, driver.CreateVmInstanceParam.BaseParam.SystemTags, "cleanTraffic::true")
+	})
+}
+
+func TestEncodeUserData(t *testing.T) {
+	t.Run("PlaintextGetsEncoded", func(t *testing.T) {
+		got := encodeUserData("#!/bin/bash\necho hi")
+		assert.Equal(t, "IyEvYmluL2Jhc2gKZWNobyBoaQ==", got)
+	})
+	t.Run("AlwaysEncodesRegardlessOfBase64Heuristic", func(t *testing.T) {
+		// "password" happens to be valid base64 — we still encode.
+		// Callers must pass plaintext, never pre-encoded base64.
+		got := encodeUserData("password")
+		assert.Equal(t, "cGFzc3dvcmQ=", got)
+	})
+	t.Run("WhitespaceTrimmed", func(t *testing.T) {
+		got := encodeUserData("  hello  ")
+		assert.Equal(t, "aGVsbG8=", got)
+	})
+	t.Run("EmptyStringEncodesToEmpty", func(t *testing.T) {
+		assert.Equal(t, "", encodeUserData(""))
+	})
+}

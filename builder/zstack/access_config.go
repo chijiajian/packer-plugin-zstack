@@ -9,6 +9,7 @@ import (
 	"github.com/hashicorp/packer-plugin-sdk/template/config"
 	"github.com/hashicorp/packer-plugin-sdk/template/interpolate"
 	"github.com/zstackio/zstack-sdk-go-v2/pkg/client"
+	"github.com/zstackio/zstack-sdk-go-v2/pkg/param"
 )
 
 type AccessConfig struct {
@@ -19,6 +20,8 @@ type AccessConfig struct {
 	AccessKeyId     string `mapstructure:"access_key_id"`
 	AccessKeySecret string `mapstructure:"access_key_secret"`
 	ctx             interpolate.Context
+
+	portEnvErr error
 }
 
 func getEnvOrDefault(envVar string, defaultValue string) string {
@@ -30,7 +33,14 @@ func getEnvOrDefault(envVar string, defaultValue string) string {
 
 func (c *AccessConfig) applyEnvDefaults() {
 	c.Host = getEnvOrDefault("ZSTACK_HOST", c.Host)
-	c.Port, _ = strconv.Atoi(getEnvOrDefault("ZSTACK_PORT", strconv.Itoa(c.Port)))
+	if raw := os.Getenv("ZSTACK_PORT"); raw != "" {
+		p, err := strconv.Atoi(raw)
+		if err != nil {
+			c.portEnvErr = fmt.Errorf("ZSTACK_PORT is not a valid integer: %q", raw)
+		} else {
+			c.Port = p
+		}
+	}
 	c.AccountName = getEnvOrDefault("ZSTACK_ACCOUNT_NAME", c.AccountName)
 	c.AccountPassword = getEnvOrDefault("ZSTACK_ACCOUNT_PASSWORD", c.AccountPassword)
 	c.AccessKeyId = getEnvOrDefault("ZSTACK_ACCESS_KEY_ID", c.AccessKeyId)
@@ -39,6 +49,9 @@ func (c *AccessConfig) applyEnvDefaults() {
 
 func (c *AccessConfig) validateCredentials() []error {
 	var errs []error
+	if c.portEnvErr != nil {
+		errs = append(errs, c.portEnvErr)
+	}
 	if c.Host == "" {
 		errs = append(errs, fmt.Errorf("host is required"))
 	}
@@ -92,6 +105,10 @@ func (c *AccessConfig) CreateClient() (*client.ZSClient, error) {
 		}
 	} else if c.AccessKeyId != "" && c.AccessKeySecret != "" {
 		cli = client.NewZSClient(client.NewZSConfig(c.Host, c.Port, "zstack").AccessKey(c.AccessKeyId, c.AccessKeySecret).ReadOnly(false).Debug(false))
+		probe := param.NewQueryParam()
+		if _, err := cli.QueryZone(&probe); err != nil {
+			return nil, fmt.Errorf("unable to validate ZStack access key credentials: %s", err)
+		}
 	}
 
 	if cli == nil {

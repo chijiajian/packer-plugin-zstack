@@ -36,9 +36,8 @@ type FlatConfig struct {
 	UserData             *string `mapstructure:"userdata" cty:"userdata" hcl:"userdata"`
 	MemorySize           *int64  `mapstructure:"memory_size" cty:"memory_size" hcl:"memory_size"`
 	CPUNum               *int64  `mapstructure:"cpu_num" cty:"cpu_num" hcl:"cpu_num"`
-	//DiskSize             *int64  `mapstructure:"disk_size" cty:"disk_size" hcl:"disk_size"`
-	BackupStorageName *string `mapstructure:"backup_storage_name" cty:"backup_storage_name" hcl:"backup_storage_name"`
-	BackupStorageUuid *string `mapstructure:"backup_storage_uuid" cty:"backup_storage_uuid" hcl:"backup_storage_uuid"`
+	BackupStorageName    *string `mapstructure:"backup_storage_name" cty:"backup_storage_name" hcl:"backup_storage_name"`
+	BackupStorageUuid    *string `mapstructure:"backup_storage_uuid" cty:"backup_storage_uuid" hcl:"backup_storage_uuid"`
 
 	SSHHost                *string `mapstructure:"ssh_host" cty:"ssh_host" hcl:"ssh_host"`
 	SSHPort                *int    `mapstructure:"ssh_port" cty:"ssh_port" hcl:"ssh_port"`
@@ -55,7 +54,9 @@ type FlatConfig struct {
 	WinRMPassword          *string `mapstructure:"winrm_password" cty:"winrm_password" hcl:"winrm_password"`
 	WinRMTimeout           *string `mapstructure:"winrm_timeout" cty:"winrm_timeout" hcl:"winrm_timeout"`
 
-	DebugMode *string `mapstructure:"debug_mode" cty:"debug_mode" hcl:"debug_mode"`
+	CleanTraffic         *bool   `mapstructure:"clean_traffic" cty:"clean_traffic" hcl:"clean_traffic"`
+	ImageReadyTimeoutRaw *string `mapstructure:"image_ready_timeout" cty:"image_ready_timeout" hcl:"image_ready_timeout"`
+	VmRunningTimeoutRaw  *string `mapstructure:"vm_running_timeout" cty:"vm_running_timeout" hcl:"vm_running_timeout"`
 }
 
 func (*Config) FlatMapstructure() interface{ HCL2Spec() map[string]hcldec.Spec } {
@@ -94,7 +95,6 @@ func (*FlatConfig) HCL2Spec() map[string]hcldec.Spec {
 		"userdata":               &hcldec.AttrSpec{Name: "userdata", Type: cty.String, Required: false},
 		"memory_size":            &hcldec.AttrSpec{Name: "memory_size", Type: cty.Number, Required: false},
 		"cpu_num":                &hcldec.AttrSpec{Name: "cpu_num", Type: cty.Number, Required: false},
-		//	"disk_size":              &hcldec.AttrSpec{Name: "disk_size", Type: cty.Number, Required: false},
 		"backup_storage_name": &hcldec.AttrSpec{Name: "backup_storage_name", Type: cty.String, Required: false},
 		"backup_storage_uuid": &hcldec.AttrSpec{Name: "backup_storage_uuid", Type: cty.String, Required: false},
 
@@ -113,7 +113,9 @@ func (*FlatConfig) HCL2Spec() map[string]hcldec.Spec {
 		"winrm_password":         &hcldec.AttrSpec{Name: "winrm_password", Type: cty.String, Required: false},
 		"winrm_timeout":          &hcldec.AttrSpec{Name: "winrm_timeout", Type: cty.String, Required: false},
 
-		"debug_mode": &hcldec.AttrSpec{Name: "debug_mode", Type: cty.String, Required: false},
+		"clean_traffic":        &hcldec.AttrSpec{Name: "clean_traffic", Type: cty.Bool, Required: false},
+		"image_ready_timeout":  &hcldec.AttrSpec{Name: "image_ready_timeout", Type: cty.String, Required: false},
+		"vm_running_timeout":   &hcldec.AttrSpec{Name: "vm_running_timeout", Type: cty.String, Required: false},
 	}
 
 	return s

@@ -4,11 +4,26 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
 	"github.com/stretchr/testify/assert"
+	"github.com/zstackio/zstack-sdk-go-v2/pkg/param"
 	"github.com/zstackio/zstack-sdk-go-v2/pkg/view"
 )
+
+type slowExportDriver struct {
+	*MockDriver
+	delay time.Duration
+}
+
+func (d *slowExportDriver) ExportImage(backupStorageUuid string, params param.ExportImageFromBackupStorageParam) (*view.ExportImageFromBackupStorageEventView, error) {
+	time.Sleep(d.delay)
+	d.ExportImageCalled = true
+	d.ExportImageBackupStorageUuid = backupStorageUuid
+	d.ExportImageParam = params
+	return d.ExportImageResult, d.ExportImageErr
+}
 
 func TestStepExportImage_Run(t *testing.T) {
 	t.Run("ExportImageSuccess", func(t *testing.T) {
@@ -83,5 +98,27 @@ func TestStepExportImage_Run(t *testing.T) {
 		assert.True(t, driver.ExportImageCalled)
 		_, ok := state.GetOk("error")
 		assert.False(t, ok)
+	})
+
+	t.Run("ContextCancelHalts", func(t *testing.T) {
+		config := &Config{
+			ImageConfig:         ImageConfig{ImageUuid: "img-1"},
+			BackupStorageConfig: BackupStorageConfig{BackupStorageUuid: "bs-1"},
+		}
+		// Make the SDK call block briefly so the context can cancel first.
+		slow := &slowExportDriver{MockDriver: &MockDriver{
+			ExportImageResult: &view.ExportImageFromBackupStorageEventView{ImageUrl: "backup://x.qcow2"},
+		}, delay: 50 * time.Millisecond}
+		state := testStateBag(config, slow)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		action := (&StepExportImage{}).Run(ctx, state)
+
+		assert.Equal(t, multistep.ActionHalt, action)
+		errVal, ok := state.GetOk("error")
+		assert.True(t, ok)
+		assert.ErrorIs(t, errVal.(error), context.Canceled)
 	})
 }

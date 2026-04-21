@@ -2,6 +2,7 @@ package zstack
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -138,6 +139,27 @@ func TestAccessConfig_Prepare(t *testing.T) {
 		errs := c.Prepare()
 		assert.NotEmpty(t, errs)
 		assert.Len(t, errs, 2)
+	})
+
+	t.Run("InvalidPortEnvReturnsError", func(t *testing.T) {
+		clearZStackEnvVars()
+		os.Setenv("ZSTACK_HOST", "example.com")
+		os.Setenv("ZSTACK_PORT", "abc")
+		os.Setenv("ZSTACK_ACCOUNT_NAME", "admin")
+		os.Setenv("ZSTACK_ACCOUNT_PASSWORD", "password")
+		defer os.Unsetenv("ZSTACK_PORT")
+
+		c := &AccessConfig{}
+		errs := c.Prepare()
+		if assert.NotEmpty(t, errs) {
+			var found bool
+			for _, e := range errs {
+				if strings.Contains(e.Error(), "ZSTACK_PORT") {
+					found = true
+				}
+			}
+			assert.True(t, found, "expected ZSTACK_PORT parse error")
+		}
 	})
 }
 
