@@ -32,6 +32,9 @@ func getEnvOrDefault(envVar string, defaultValue string) string {
 }
 
 func (c *AccessConfig) applyEnvDefaults() {
+	// Reset transient env-parse state so repeated Prepare() calls don't see
+	// a stale error from a previous invocation with a bad ZSTACK_PORT.
+	c.portEnvErr = nil
 	c.Host = getEnvOrDefault("ZSTACK_HOST", c.Host)
 	if raw := os.Getenv("ZSTACK_PORT"); raw != "" {
 		p, err := strconv.Atoi(raw)
