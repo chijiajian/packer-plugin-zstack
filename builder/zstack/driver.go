@@ -35,6 +35,8 @@ type Driver interface {
 	DeleteVmInstance(uuid string) error
 
 	CreateImage(rootVolumeUuid string, params param.CreateRootVolumeTemplateFromRootVolumeParam) (*view.ImageInventoryView, error)
+	CreateImageFromVolumeSnapshot(snapshotUuid string, params param.CreateRootVolumeTemplateFromVolumeSnapshotParam) (*view.ImageInventoryView, error)
+	GetVolumeSnapshot(uuid string) (*view.VolumeSnapshotInventoryView, error)
 	AddImage(param param.AddImageParam) (*view.ImageInventoryView, error)
 	DeleteImage(uuid string) error
 	ExpungeImage(uuid string) error
@@ -210,6 +212,28 @@ func (d *ZStackDriver) CreateImage(rootVolumeUuid string, rootVolumeParam param.
 	}
 	log.Printf("[INFO] Successfully created image '%s'", img.UUID)
 	return img, nil
+}
+
+func (d *ZStackDriver) CreateImageFromVolumeSnapshot(snapshotUuid string, snapshotParam param.CreateRootVolumeTemplateFromVolumeSnapshotParam) (*view.ImageInventoryView, error) {
+	log.Printf("[INFO] Creating image from volume snapshot '%s'", snapshotUuid)
+	img, err := d.client.CreateRootVolumeTemplateFromVolumeSnapshot(snapshotUuid, snapshotParam)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create image from volume snapshot '%s': %v", snapshotUuid, err)
+	}
+	log.Printf("[INFO] Successfully created image '%s' from snapshot '%s'", img.UUID, snapshotUuid)
+	return img, nil
+}
+
+func (d *ZStackDriver) GetVolumeSnapshot(uuid string) (*view.VolumeSnapshotInventoryView, error) {
+	log.Printf("[DEBUG] Getting volume snapshot with UUID: %s", uuid)
+	snapshot, err := d.client.GetVolumeSnapshot(uuid)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query volume snapshot '%s': %v", uuid, err)
+	}
+	if snapshot == nil {
+		return nil, fmt.Errorf("volume snapshot '%s' not found", uuid)
+	}
+	return snapshot, nil
 }
 
 func (d *ZStackDriver) AddImage(image param.AddImageParam) (*view.ImageInventoryView, error) {

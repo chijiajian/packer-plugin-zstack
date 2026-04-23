@@ -18,8 +18,11 @@ func (s *StepPreValidate) Run(ctx context.Context, state multistep.StateBag) mul
 	config := state.Get("config").(*Config)
 	ui.Say("Validating configuration...")
 
-	// AC-002-02: Skip network query when network_uuid is provided
-	if config.NetworkConfig.L3NetworkUuid != "" {
+	snapshotOnly := config.SourceVolumeSnapshotUuid != ""
+
+	if snapshotOnly {
+		log.Printf("[INFO] Snapshot-only build: skipping L3 network validation")
+	} else if config.NetworkConfig.L3NetworkUuid != "" {
 		log.Printf("[INFO] Using provided network UUID: %s", config.NetworkConfig.L3NetworkUuid)
 		ui.Say(fmt.Sprintf("Using provided network UUID: %s", config.NetworkConfig.L3NetworkUuid))
 	} else {
@@ -35,6 +38,12 @@ func (s *StepPreValidate) Run(ctx context.Context, state multistep.StateBag) mul
 	// source_image_url imports require backup storage for image download/import.
 	if config.SourceImageUrl != "" && config.BackupStorageConfig.BackupStorageUuid == "" && config.BackupStorageConfig.BackupStorageName == "" {
 		err := fmt.Errorf("backup_storage_name or backup_storage_uuid is required when source_image_url is set")
+		ui.Errorf("Backup storage validation failed: %s", err)
+		return multistep.ActionHalt
+	}
+
+	if snapshotOnly && config.BackupStorageConfig.BackupStorageUuid == "" && config.BackupStorageConfig.BackupStorageName == "" {
+		err := fmt.Errorf("backup_storage_name or backup_storage_uuid is required when source_volume_snapshot_uuid is set")
 		ui.Errorf("Backup storage validation failed: %s", err)
 		return multistep.ActionHalt
 	}

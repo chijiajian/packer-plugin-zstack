@@ -87,6 +87,17 @@ type MockDriver struct {
 	CreateImageRootVolumeUuid string
 	CreateImageParam          param.CreateRootVolumeTemplateFromRootVolumeParam
 
+	CreateImageFromSnapshotResult       *view.ImageInventoryView
+	CreateImageFromSnapshotErr          error
+	CreateImageFromSnapshotCalled       bool
+	CreateImageFromSnapshotSnapshotUuid string
+	CreateImageFromSnapshotParam        param.CreateRootVolumeTemplateFromVolumeSnapshotParam
+
+	GetVolumeSnapshotResult *view.VolumeSnapshotInventoryView
+	GetVolumeSnapshotErr    error
+	GetVolumeSnapshotCalled bool
+	GetVolumeSnapshotUuid   string
+
 	AddImageResult *view.ImageInventoryView
 	AddImageErr    error
 	AddImageCalled bool
@@ -204,6 +215,17 @@ func (m *MockDriver) CreateImage(rootVolumeUuid string, params param.CreateRootV
 	m.CreateImageRootVolumeUuid = rootVolumeUuid
 	m.CreateImageParam = params
 	return m.CreateImageResult, m.CreateImageErr
+}
+func (m *MockDriver) CreateImageFromVolumeSnapshot(snapshotUuid string, params param.CreateRootVolumeTemplateFromVolumeSnapshotParam) (*view.ImageInventoryView, error) {
+	m.CreateImageFromSnapshotCalled = true
+	m.CreateImageFromSnapshotSnapshotUuid = snapshotUuid
+	m.CreateImageFromSnapshotParam = params
+	return m.CreateImageFromSnapshotResult, m.CreateImageFromSnapshotErr
+}
+func (m *MockDriver) GetVolumeSnapshot(uuid string) (*view.VolumeSnapshotInventoryView, error) {
+	m.GetVolumeSnapshotCalled = true
+	m.GetVolumeSnapshotUuid = uuid
+	return m.GetVolumeSnapshotResult, m.GetVolumeSnapshotErr
 }
 func (m *MockDriver) AddImage(p param.AddImageParam) (*view.ImageInventoryView, error) {
 	m.AddImageCalled = true

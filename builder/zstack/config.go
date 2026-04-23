@@ -63,15 +63,17 @@ func (c *Config) VmRunningTimeout() time.Duration {
 }
 
 type ImageConfig struct {
-	ImageName          string   `mapstructure:"image_name"`
-	ImageDescription   string   `mapstructure:"image_description"`
-	SourceImage        string   `mapstructure:"source_image"`
-	GuestOsType        string   `mapstructure:"guest_os_type"`
-	SourceImageUrl     string   `mapstructure:"source_image_url"`
-	Format             string   `mapstructure:"format"`
-	BackupStorageUuids []string `mapstructure:"backup_storage_uuids"`
-	ImageUuid          string   `mapstructure:"image_uuid"`
-	Platform           string   `mapstructure:"platform"`
+	ImageName                string   `mapstructure:"image_name"`
+	ImageDescription         string   `mapstructure:"image_description"`
+	SourceImage              string   `mapstructure:"source_image"`
+	GuestOsType              string   `mapstructure:"guest_os_type"`
+	SourceImageUrl           string   `mapstructure:"source_image_url"`
+	Format                   string   `mapstructure:"format"`
+	BackupStorageUuids       []string `mapstructure:"backup_storage_uuids"`
+	ImageUuid                string   `mapstructure:"image_uuid"`
+	Platform                 string   `mapstructure:"platform"`
+	Architecture             string   `mapstructure:"architecture"`
+	SourceVolumeSnapshotUuid string   `mapstructure:"source_volume_snapshot_uuid"`
 }
 
 type NetworkConfig struct {
@@ -165,6 +167,20 @@ func (c *Config) Prepare(raws ...any) error {
 		}
 		if c.SourceImage == "" {
 			errs = packersdk.MultiErrorAppend(errs, errors.New("source image name must be specified when using source_image_url"))
+		}
+	}
+
+	if c.SourceVolumeSnapshotUuid != "" {
+		log.Printf("[INFO] Configuring image creation from volume snapshot: %s", c.SourceVolumeSnapshotUuid)
+		if c.ImageName == "" {
+			errs = packersdk.MultiErrorAppend(errs, errors.New("image_name must be specified when using source_volume_snapshot_uuid"))
+		}
+		if c.BackupStorageConfig.BackupStorageUuid == "" && c.BackupStorageConfig.BackupStorageName == "" {
+			errs = packersdk.MultiErrorAppend(errs, errors.New("backup_storage_name or backup_storage_uuid is required when using source_volume_snapshot_uuid"))
+		}
+		if c.Platform == "" {
+			c.Platform = "Linux"
+			log.Printf("[DEBUG] Default platform set to: %s", c.Platform)
 		}
 	}
 

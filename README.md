@@ -39,6 +39,8 @@ Optional backup storage settings let you export the resulting image when `backup
 
 Use `image_description` to set a custom description for the generated image.
 
+The plugin also supports building an image directly from an existing **volume snapshot** by setting `source_volume_snapshot_uuid`. In this mode no VM is created and SSH/provisioners are skipped — see [`example/from_snapshot.pkr.hcl`](example/from_snapshot.pkr.hcl).
+
 See the [`example/`](example) directory for ready-to-run HCL examples covering account/password auth, AK/SK auth, and UUID passthrough.
 
 ## E2E Test Method
