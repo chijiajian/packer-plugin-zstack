@@ -40,9 +40,13 @@ The zstack builder is used to create ZStack Image by VM Instance
 
 - `guest_os_type` (String) - Guest OS type, such as "Ubuntu", "CentOS", etc.
 
+- `architecture` (String) - CPU architecture of the image, such as "x86_64", "aarch64".
+
 - `image_name` (String) - Name of the target image to be created.
 
 - `image_description` (String) - Description for the created image. Defaults to the image name if not set.
+
+- `source_volume_snapshot_uuid` (String) - UUID of an existing ZStack volume snapshot. When set, the builder creates a root volume template directly from the snapshot and skips VM creation, SSH connection, and provisioners. Requires `image_name` and one of `backup_storage_name` / `backup_storage_uuid`.
 
 **Network Parameters**
 
@@ -105,4 +109,28 @@ source "zstack" "example" {
   ssh_password = "your-ssh-password"
 }
 
+```
+
+### Example: Build From Volume Snapshot
+
+Skip VM creation entirely and build an image directly from an existing volume snapshot. No SSH connection or provisioners are required:
+
+```hcl
+source "zstack" "from_snapshot" {
+  zstack_host      = "https://zstack.example.com"
+  account_name     = env("ZSTACK_ACCOUNT_NAME")
+  account_password = env("ZSTACK_ACCOUNT_PASSWORD")
+
+  source_volume_snapshot_uuid = "snapshot-uuid-here"
+
+  image_name          = "packer-from-snapshot-image"
+  image_description   = "Built from ZStack volume snapshot"
+  platform            = "Linux"
+  architecture        = "x86_64"
+  backup_storage_name = "local-backup"
+}
+
+build {
+  sources = ["source.zstack.from_snapshot"]
+}
 ```

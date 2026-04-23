@@ -27,7 +27,11 @@ func (b *Builder) Prepare(raws ...any) ([]string, []string, error) {
 	errs := b.config.Prepare(raws...)
 
 	if b.config.Comm.Type == "" {
-		b.config.Comm.Type = "ssh"
+		if b.config.SourceVolumeSnapshotUuid != "" {
+			b.config.Comm.Type = "none"
+		} else {
+			b.config.Comm.Type = "ssh"
+		}
 	}
 
 	//var errs *packer.MultiError
@@ -55,6 +59,25 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 	state.Put("driver", driver)
 	state.Put("config", &b.config)
 	state.Put("hook", hook)
+
+	var steps []multistep.Step
+
+	if b.config.SourceVolumeSnapshotUuid != "" {
+		log.Printf("[INFO] Using snapshot-only build path (source_volume_snapshot_uuid=%s)", b.config.SourceVolumeSnapshotUuid)
+		steps = []multistep.Step{
+			&StepPreValidate{},
+			&StepCreateImageFromSnapshot{},
+			&StepWaitForImageReady{},
+			&StepExportImage{},
+		}
+
+		log.Printf("[DEBUG] Build steps prepared with %s", b.config.RedactedSummary())
+
+		b.runner = commonsteps.NewRunner(steps, b.config.PackerConfig, ui)
+		b.runner.Run(ctx, state)
+
+		return b.collectArtifact(state, driver)
+	}
 
 	baseSteps := []multistep.Step{
 		&StepPreValidate{},
@@ -107,13 +130,17 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 		&StepExportImage{},
 	)
 
-	steps := append(baseSteps, remainingSteps...)
+	steps = append(baseSteps, remainingSteps...)
 
 	log.Printf("[DEBUG] Build steps prepared with %s", b.config.RedactedSummary())
 
 	b.runner = commonsteps.NewRunner(steps, b.config.PackerConfig, ui)
 	b.runner.Run(ctx, state)
 
+	return b.collectArtifact(state, driver)
+}
+
+func (b *Builder) collectArtifact(state multistep.StateBag, driver Driver) (packersdk.Artifact, error) {
 	var urls []string
 	if v, ok := state.GetOk("image_url"); ok {
 		switch val := v.(type) {
@@ -134,7 +161,6 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 		}
 	}
 
-	// Error Handler
 	if rawErr, ok := state.GetOk("error"); ok {
 		if err, ok := rawErr.(error); ok {
 			return nil, err
