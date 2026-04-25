@@ -1,3 +1,6 @@
+// Copyright ZStack.io, Inc. 2013, 2026
+// SPDX-License-Identifier: MPL-2.0
+
 package zstack
 
 import (
@@ -22,7 +25,6 @@ func (s *StepInstanceOfferingValidate) Run(ctx context.Context, state multistep.
 	if config.InstanceConfig.InstanceOfferingUuid != "" {
 		log.Printf("[INFO] Using provided instance offering UUID: %s", config.InstanceConfig.InstanceOfferingUuid)
 		ui.Say(fmt.Sprintf("Using provided instance offering UUID: %s", config.InstanceConfig.InstanceOfferingUuid))
-		state.Put("config", config)
 		return multistep.ActionContinue
 	}
 
@@ -34,7 +36,6 @@ func (s *StepInstanceOfferingValidate) Run(ctx context.Context, state multistep.
 
 	config.InstanceConfig.InstanceOfferingUuid = instanceOfferings[0].UUID
 	ui.Say("Instance offering validated")
-	state.Put("config", config)
 	return multistep.ActionContinue
 }
 

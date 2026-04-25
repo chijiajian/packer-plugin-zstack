@@ -1,3 +1,6 @@
+# Copyright ZStack.io, Inc. 2013, 2026
+# SPDX-License-Identifier: MPL-2.0
+
 # Account/password authentication with source image name lookup
 variable "zstack_host" {
   type    = string

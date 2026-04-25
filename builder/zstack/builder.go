@@ -1,3 +1,6 @@
+// Copyright ZStack.io, Inc. 2013, 2026
+// SPDX-License-Identifier: MPL-2.0
+
 package zstack
 
 import (
@@ -49,7 +52,7 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 	b.ui = ui
 	log.Printf("[DEBUG] Starting build with %s", b.config.RedactedSummary())
 
-	driver, err := b.config.AccessConfig.Driver()
+	driver, err := b.config.AccessConfig.Driver(b.config.PackerDebug)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize ZStack Driver: %v", err)
 	}

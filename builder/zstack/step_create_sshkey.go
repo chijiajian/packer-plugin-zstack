@@ -1,3 +1,6 @@
+// Copyright ZStack.io, Inc. 2013, 2026
+// SPDX-License-Identifier: MPL-2.0
+
 package zstack
 
 import (
@@ -38,7 +41,6 @@ func (s *StepCreateSSHKey) Run(ctx context.Context, state multistep.StateBag) mu
 			return multistep.ActionHalt
 		}
 		config.Comm.SSHPrivateKey = privateKeyBytes
-		state.Put("config", config)
 		return multistep.ActionContinue
 	}
 
@@ -47,7 +49,7 @@ func (s *StepCreateSSHKey) Run(ctx context.Context, state multistep.StateBag) mu
 	if err != nil {
 		err := fmt.Errorf("error creating temporary ssh key: %s", err)
 		state.Put("error", err)
-		ui.Errorf(err.Error())
+		ui.Error(err.Error())
 		return multistep.ActionHalt
 	}
 
@@ -61,7 +63,7 @@ func (s *StepCreateSSHKey) Run(ctx context.Context, state multistep.StateBag) mu
 	if err != nil {
 		err := fmt.Errorf("error creating temporary ssh key: %s", err)
 		state.Put("error", err)
-		ui.Errorf(err.Error())
+		ui.Error(err.Error())
 		return multistep.ActionHalt
 	}
 
@@ -72,7 +74,6 @@ func (s *StepCreateSSHKey) Run(ctx context.Context, state multistep.StateBag) mu
 		config.Comm.SSHPublicKey = config.Comm.SSHPublicKey[:len(config.Comm.SSHPublicKey)-1]
 	}
 	config.SshKey = string(config.Comm.SSHPublicKey)
-	state.Put("config", config)
 
 	if s.Debug {
 		ui.Message(fmt.Sprintf("Saving key for debug purposes: %s", s.DebugKeyPath))

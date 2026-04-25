@@ -1,3 +1,6 @@
+// Copyright ZStack.io, Inc. 2013, 2026
+// SPDX-License-Identifier: MPL-2.0
+
 package zstack
 
 import (
@@ -23,11 +26,13 @@ func TestStepPreValidate_Run(t *testing.T) {
 		{
 			name: "NetworkUuidPassthrough",
 			config: &Config{
-				NetworkConfig: NetworkConfig{L3NetworkUuid: "network-uuid"},
+				NetworkConfig:       NetworkConfig{L3NetworkUuid: "network-uuid"},
+				BackupStorageConfig: BackupStorageConfig{BackupStorageUuid: "backup-storage-uuid"},
 			},
-			driver:              &MockDriver{},
-			expectedAction:      multistep.ActionContinue,
-			expectedNetworkUUID: "network-uuid",
+			driver:                    &MockDriver{},
+			expectedAction:            multistep.ActionContinue,
+			expectedNetworkUUID:       "network-uuid",
+			expectedBackupStorageUUID: "backup-storage-uuid",
 			assertions: func(t *testing.T, driver *MockDriver) {
 				assert.False(t, driver.QueryL3NetworkCalled)
 			},
@@ -35,15 +40,17 @@ func TestStepPreValidate_Run(t *testing.T) {
 		{
 			name: "NetworkNameQuery",
 			config: &Config{
-				NetworkConfig: NetworkConfig{L3NetworkName: "network-name"},
+				NetworkConfig:       NetworkConfig{L3NetworkName: "network-name"},
+				BackupStorageConfig: BackupStorageConfig{BackupStorageUuid: "backup-storage-uuid"},
 			},
 			driver: &MockDriver{
 				QueryL3NetworkResult: []view.L3NetworkInventoryView{{
 					BaseInfoView: view.BaseInfoView{UUID: "network-uuid"},
 				}},
 			},
-			expectedAction:      multistep.ActionContinue,
-			expectedNetworkUUID: "network-uuid",
+			expectedAction:            multistep.ActionContinue,
+			expectedNetworkUUID:       "network-uuid",
+			expectedBackupStorageUUID: "backup-storage-uuid",
 			assertions: func(t *testing.T, driver *MockDriver) {
 				assert.True(t, driver.QueryL3NetworkCalled)
 				assert.Equal(t, "network-name", driver.QueryL3NetworkName)
@@ -108,11 +115,26 @@ func TestStepPreValidate_Run(t *testing.T) {
 		{
 			name: "BackupStorageOptionalSkip",
 			config: &Config{
-				NetworkConfig: NetworkConfig{L3NetworkUuid: "network-uuid"},
+				NetworkConfig:  NetworkConfig{L3NetworkUuid: "network-uuid"},
+				InstanceConfig: InstanceConfig{RootVolumeUuid: "root-volume-uuid"},
 			},
 			driver:              &MockDriver{},
-			expectedAction:      multistep.ActionContinue,
+			expectedAction:      multistep.ActionHalt,
 			expectedNetworkUUID: "network-uuid",
+			assertions: func(t *testing.T, driver *MockDriver) {
+				assert.False(t, driver.QueryBackStorageCalled)
+			},
+		},
+		{
+			name: "BackupStorageOptionalSkipWithoutRootVolume",
+			config: &Config{
+				NetworkConfig:       NetworkConfig{L3NetworkUuid: "network-uuid"},
+				BackupStorageConfig: BackupStorageConfig{BackupStorageUuid: "backup-storage-uuid"},
+			},
+			driver:                    &MockDriver{},
+			expectedAction:            multistep.ActionContinue,
+			expectedNetworkUUID:       "network-uuid",
+			expectedBackupStorageUUID: "backup-storage-uuid",
 			assertions: func(t *testing.T, driver *MockDriver) {
 				assert.False(t, driver.QueryBackStorageCalled)
 			},

@@ -21,7 +21,7 @@ The zstack builder is used to create ZStack Image by VM Instance
 
 - `access_key_id` (String) AccessKey ID for ZStack API. Create AccessKey ID from MN,  Operational Management->Access Control->AccessKey Management. May also be provided via ZSTACK_ACCESS_KEY_ID environment variable. Required if using AccessKey authentication. Mutually exclusive with `account_name` and `account_password`.
 - `access_key_secret` (String, Sensitive) AccessKey Secret for ZStack API. May also be provided via ZSTACK_ACCESS_KEY_SECRET environment variable. Required if using AccessKey authentication. Mutually exclusive with `account_name` and `account_password`.
-- `account_name` (String) Username for ZStack API. May also be provided via ZSTACK_ACCOUN_TNAME environment variable. Required if using Account authentication.  Only supports the platform administrator account (`admin`). Mutually exclusive with `access_key_id` and `access_key_secret`. Using `access_key_id` and `access_key_secret` is the recommended approach for authentication, as it provides more flexibility and security.
+- `account_name` (String) Username for ZStack API. May also be provided via ZSTACK_ACCOUNT_NAME environment variable. Required if using Account authentication.  Only supports the platform administrator account (`admin`). Mutually exclusive with `access_key_id` and `access_key_secret`. Using `access_key_id` and `access_key_secret` is the recommended approach for authentication, as it provides more flexibility and security.
 - `account_password` (String, Sensitive) Password for ZStack API. May also be provided via ZSTACK_ACCOUNT_PASSWORD environment variable.Required if using Account authentication.  Only supports the platform administrator account (`admin`). Mutually exclusive with `access_key_id` and `access_key_secret`. Using `access_key_id` and `access_key_secret` is the recommended approach for authentication, as it provides more flexibility and security.
 - `port` (Number) ZStack Cloud MN API port. May also be provided via ZSTACK_PORT environment variable.
 
@@ -46,7 +46,7 @@ The zstack builder is used to create ZStack Image by VM Instance
 
 - `image_description` (String) - Description for the created image. Defaults to the image name if not set.
 
-- `source_volume_snapshot_uuid` (String) - UUID of an existing ZStack volume snapshot. When set, the builder creates a root volume template directly from the snapshot and skips VM creation, SSH connection, and provisioners. Requires `image_name` and one of `backup_storage_name` / `backup_storage_uuid`.
+- `source_volume_snapshot_uuid` (String) - UUID of an existing ZStack volume snapshot. When set, the builder creates a root volume template from that existing snapshot and skips VM creation, SSH connection, and provisioners. Requires `image_name` and one of `backup_storage_name` / `backup_storage_uuid`.
 
 **Network Parameters**
 
@@ -69,7 +69,7 @@ The zstack builder is used to create ZStack Image by VM Instance
 **Storage Parameters**
 - `backup_storage_name` (String) - Name of the backup storage for storing created images.
 
-- `backup_storage_uuid` (String) - UUID of the backup storage. Optional - when neither backup_storage_name nor backup_storage_uuid is specified, the image export step is skipped.
+- `backup_storage_uuid` (String) - UUID of the backup storage. Required for image creation because the builder now produces the final image template through the snapshot-to-template flow.
 
 **SSH Parameters**
 - `ssh_username` (String) - SSH username for connecting to the created VM instance.
@@ -86,7 +86,7 @@ The zstack builder is used to create ZStack Image by VM Instance
 
 ```hcl
 source "zstack" "example" {
-  zstack_host       = "https://zstack.example.com"
+  zstack_host       = "zstack.example.com"
   access_key_id     = env("ZSTACK_ACCESS_KEY_ID")
   access_key_secret = env("ZSTACK_ACCESS_KEY_SECRET")
 
@@ -113,11 +113,11 @@ source "zstack" "example" {
 
 ### Example: Build From Volume Snapshot
 
-Skip VM creation entirely and build an image directly from an existing volume snapshot. No SSH connection or provisioners are required:
+Skip VM creation entirely and build an image from an existing volume snapshot. No SSH connection or provisioners are required:
 
 ```hcl
 source "zstack" "from_snapshot" {
-  zstack_host      = "https://zstack.example.com"
+  zstack_host      = "zstack.example.com"
   account_name     = env("ZSTACK_ACCOUNT_NAME")
   account_password = env("ZSTACK_ACCOUNT_PASSWORD")
 

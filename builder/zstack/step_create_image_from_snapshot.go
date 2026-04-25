@@ -1,3 +1,6 @@
+// Copyright ZStack.io, Inc. 2013, 2026
+// SPDX-License-Identifier: MPL-2.0
+
 package zstack
 
 import (
@@ -78,7 +81,6 @@ func (s *StepCreateImageFromSnapshot) Run(ctx context.Context, state multistep.S
 	}
 
 	config.ImageUuid = image.UUID
-	state.Put("config", config)
 
 	log.Printf("[INFO] Successfully created image with UUID: %s from snapshot %s", image.UUID, snapshotUuid)
 	ui.Say(fmt.Sprintf("Successfully created image '%s' (UUID: %s) from snapshot %s", config.ImageName, image.UUID, snapshotUuid))

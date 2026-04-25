@@ -1,3 +1,6 @@
+# Copyright ZStack.io, Inc. 2013, 2026
+# SPDX-License-Identifier: MPL-2.0
+
 # UUID passthrough - skip all name-based lookups
 variable "zstack_host" {
   type    = string
@@ -50,7 +53,9 @@ source "zstack" "uuid" {
   image_name        = "packer-uuid-image"
   image_description = "Built with Packer - UUID passthrough example"
 
-  # No backup_storage - export step will be skipped
+  backup_storage_name = "local-backup"
+
+  # Backup storage is required because the builder now creates the final image via snapshot -> image.
   ssh_username = "root"
   ssh_password = "your-ssh-password"
 }

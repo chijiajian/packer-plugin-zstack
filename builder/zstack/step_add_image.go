@@ -1,3 +1,6 @@
+// Copyright ZStack.io, Inc. 2013, 2026
+// SPDX-License-Identifier: MPL-2.0
+
 package zstack
 
 import (
@@ -19,8 +22,10 @@ func (s *StepAddImage) Run(ctx context.Context, state multistep.StateBag) multis
 	driver := state.Get("driver").(Driver)
 
 	if config.SourceImageUrl == "" || config.SourceImage == "" {
-		ui.Error("Source image URL or name is empty")
-		log.Printf("[ERROR] Source image URL or name is empty")
+		err := fmt.Errorf("source image URL or name is empty")
+		ui.Error(err.Error())
+		log.Printf("[ERROR] %v", err)
+		state.Put("error", err)
 		return multistep.ActionHalt
 	}
 
@@ -51,8 +56,10 @@ func (s *StepAddImage) Run(ctx context.Context, state multistep.StateBag) multis
 
 	img, err := driver.AddImage(imageParam)
 	if err != nil {
-		ui.Error(fmt.Sprintf("Failed to add image: %s", err))
-		log.Printf("[ERROR] Failed to add image: %v", err)
+		err = fmt.Errorf("failed to add image: %v", err)
+		ui.Error(err.Error())
+		log.Printf("[ERROR] %v", err)
+		state.Put("error", err)
 		return multistep.ActionHalt
 	}
 
@@ -60,7 +67,6 @@ func (s *StepAddImage) Run(ctx context.Context, state multistep.StateBag) multis
 	log.Printf("[INFO] Image added successfully with UUID: %s", img.UUID)
 
 	config.ImageUuid = img.UUID
-	state.Put("config", config)
 
 	return multistep.ActionContinue
 }

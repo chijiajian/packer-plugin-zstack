@@ -63,10 +63,10 @@
 
 ```hcl
 source "zstack" "test" {
-  zstack_host       = "10.3.3.3"
+  zstack_host       = "zstack.example.com"
   port             = 8080
-  access_key_id     = "aaaaaaa"
-  access_key_secret = "1UQ3bfz9qS4vaaaaaaaaa"
+  access_key_id     = "your-access-key-id"
+  access_key_secret = "your-access-key-secret"
   
   source_image      = "Centos8"
   source_image_url  = "http://example.com/image.qcow2"
@@ -80,7 +80,7 @@ source "zstack" "test" {
   image_name       = "image-by-packer"
   
   ssh_username     = "root"
-  ssh_password     = "password"
+  ssh_password     = "your-ssh-password"
 }
 
 ```

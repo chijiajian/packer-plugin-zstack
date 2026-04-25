@@ -1,3 +1,6 @@
+// Copyright ZStack.io, Inc. 2013, 2026
+// SPDX-License-Identifier: MPL-2.0
+
 package zstack
 
 import (
@@ -86,6 +89,12 @@ type MockDriver struct {
 	CreateImageCalled         bool
 	CreateImageRootVolumeUuid string
 	CreateImageParam          param.CreateRootVolumeTemplateFromRootVolumeParam
+
+	CreateVolumeSnapshotResult     *view.VolumeSnapshotInventoryView
+	CreateVolumeSnapshotErr        error
+	CreateVolumeSnapshotCalled     bool
+	CreateVolumeSnapshotVolumeUuid string
+	CreateVolumeSnapshotParam      param.CreateVolumeSnapshotParam
 
 	CreateImageFromSnapshotResult       *view.ImageInventoryView
 	CreateImageFromSnapshotErr          error
@@ -215,6 +224,12 @@ func (m *MockDriver) CreateImage(rootVolumeUuid string, params param.CreateRootV
 	m.CreateImageRootVolumeUuid = rootVolumeUuid
 	m.CreateImageParam = params
 	return m.CreateImageResult, m.CreateImageErr
+}
+func (m *MockDriver) CreateVolumeSnapshot(volumeUuid string, params param.CreateVolumeSnapshotParam) (*view.VolumeSnapshotInventoryView, error) {
+	m.CreateVolumeSnapshotCalled = true
+	m.CreateVolumeSnapshotVolumeUuid = volumeUuid
+	m.CreateVolumeSnapshotParam = params
+	return m.CreateVolumeSnapshotResult, m.CreateVolumeSnapshotErr
 }
 func (m *MockDriver) CreateImageFromVolumeSnapshot(snapshotUuid string, params param.CreateRootVolumeTemplateFromVolumeSnapshotParam) (*view.ImageInventoryView, error) {
 	m.CreateImageFromSnapshotCalled = true

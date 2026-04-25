@@ -1,11 +1,11 @@
+// Copyright ZStack.io, Inc. 2013, 2026
+// SPDX-License-Identifier: MPL-2.0
+
 package zstack
 
 import (
-	"context"
 	"fmt"
 	"log"
-	"net"
-	"time"
 
 	"github.com/zstackio/zstack-sdk-go-v2/pkg/client"
 	"github.com/zstackio/zstack-sdk-go-v2/pkg/param"
@@ -34,6 +34,7 @@ type Driver interface {
 	DestroyVmInstance(uuid string) error
 	DeleteVmInstance(uuid string) error
 
+	CreateVolumeSnapshot(volumeUuid string, params param.CreateVolumeSnapshotParam) (*view.VolumeSnapshotInventoryView, error)
 	CreateImage(rootVolumeUuid string, params param.CreateRootVolumeTemplateFromRootVolumeParam) (*view.ImageInventoryView, error)
 	CreateImageFromVolumeSnapshot(snapshotUuid string, params param.CreateRootVolumeTemplateFromVolumeSnapshotParam) (*view.ImageInventoryView, error)
 	GetVolumeSnapshot(uuid string) (*view.VolumeSnapshotInventoryView, error)
@@ -204,6 +205,16 @@ func (d *ZStackDriver) DestroyVmInstance(uuid string) error {
 	return nil
 }
 
+func (d *ZStackDriver) CreateVolumeSnapshot(volumeUuid string, snapshotParam param.CreateVolumeSnapshotParam) (*view.VolumeSnapshotInventoryView, error) {
+	log.Printf("[INFO] Creating volume snapshot from volume '%s'", volumeUuid)
+	snapshot, err := d.client.CreateVolumeSnapshot(volumeUuid, snapshotParam)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create volume snapshot from volume '%s': %v", volumeUuid, err)
+	}
+	log.Printf("[INFO] Successfully created volume snapshot '%s' from volume '%s'", snapshot.UUID, volumeUuid)
+	return snapshot, nil
+}
+
 func (d *ZStackDriver) CreateImage(rootVolumeUuid string, rootVolumeParam param.CreateRootVolumeTemplateFromRootVolumeParam) (*view.ImageInventoryView, error) {
 	log.Printf("[INFO] Creating image from root volume.")
 	img, err := d.client.CreateRootVolumeTemplateFromRootVolume(rootVolumeUuid, rootVolumeParam)
@@ -305,42 +316,4 @@ func (d *ZStackDriver) AttachDataVolumeToVm(vmUuid, volumeUuid string) (*view.Vo
 	}
 	log.Printf("[INFO] Successfully attached data volume '%s' to VM '%s'", volumeUuid, vmUuid)
 	return datavol, nil
-}
-
-func (d *ZStackDriver) WaitForSSH(vmUuid string, sshPort int, timeout time.Duration) error {
-	log.Printf("[INFO] Waiting for SSH connectivity on VM %s", vmUuid)
-	vm, err := d.GetVmInstance(vmUuid)
-	if err != nil {
-		return fmt.Errorf("failed to get VM instance: %v", err)
-	}
-
-	if len(vm.VmNics) == 0 || vm.VmNics[0].Ip == "" {
-		return fmt.Errorf("VM '%s' has no default IP to connect", vmUuid)
-	}
-	ip := vm.VmNics[0].Ip
-
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return fmt.Errorf("timeout waiting for SSH on VM '%s'", vmUuid)
-		case <-ticker.C:
-			conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", ip, sshPort), 5*time.Second)
-			if err == nil {
-				conn.Close()
-				log.Printf("[INFO] Successfully established SSH connection to %s:%d", ip, sshPort)
-				return nil
-			}
-			log.Printf("[DEBUG] SSH connection attempt to %s:%d failed, retrying...", ip, sshPort)
-		}
-	}
-}
-
-func addSystemTags(tags []string, args ...string) []string {
-	return append(tags, args...)
 }

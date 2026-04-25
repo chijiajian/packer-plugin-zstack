@@ -1,3 +1,6 @@
+// Copyright ZStack.io, Inc. 2013, 2026
+// SPDX-License-Identifier: MPL-2.0
+
 package zstack
 
 import (
@@ -31,9 +34,9 @@ type Config struct {
 	BackupStorageConfig `mapstructure:",squash"`
 	ExportImageResult   `mapstructure:",squash"`
 
-	CleanTraffic           bool   `mapstructure:"clean_traffic"`
-	ImageReadyTimeoutRaw   string `mapstructure:"image_ready_timeout"`
-	VmRunningTimeoutRaw    string `mapstructure:"vm_running_timeout"`
+	CleanTraffic         bool   `mapstructure:"clean_traffic"`
+	ImageReadyTimeoutRaw string `mapstructure:"image_ready_timeout"`
+	VmRunningTimeoutRaw  string `mapstructure:"vm_running_timeout"`
 
 	imageReadyTimeout time.Duration
 	vmRunningTimeout  time.Duration
@@ -170,13 +173,14 @@ func (c *Config) Prepare(raws ...any) error {
 		}
 	}
 
+	if c.BackupStorageConfig.BackupStorageUuid == "" && c.BackupStorageConfig.BackupStorageName == "" {
+		errs = packersdk.MultiErrorAppend(errs, errors.New("backup_storage_name or backup_storage_uuid is required"))
+	}
+
 	if c.SourceVolumeSnapshotUuid != "" {
 		log.Printf("[INFO] Configuring image creation from volume snapshot: %s", c.SourceVolumeSnapshotUuid)
 		if c.ImageName == "" {
 			errs = packersdk.MultiErrorAppend(errs, errors.New("image_name must be specified when using source_volume_snapshot_uuid"))
-		}
-		if c.BackupStorageConfig.BackupStorageUuid == "" && c.BackupStorageConfig.BackupStorageName == "" {
-			errs = packersdk.MultiErrorAppend(errs, errors.New("backup_storage_name or backup_storage_uuid is required when using source_volume_snapshot_uuid"))
 		}
 		if c.Platform == "" {
 			c.Platform = "Linux"

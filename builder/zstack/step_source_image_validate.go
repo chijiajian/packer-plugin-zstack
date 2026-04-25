@@ -1,3 +1,6 @@
+// Copyright ZStack.io, Inc. 2013, 2026
+// SPDX-License-Identifier: MPL-2.0
+
 package zstack
 
 import (
@@ -22,7 +25,6 @@ func (s *StepSourceImageValidate) Run(ctx context.Context, state multistep.State
 	if config.ImageConfig.ImageUuid != "" {
 		log.Printf("[INFO] Using provided source image UUID: %s", config.ImageConfig.ImageUuid)
 		ui.Say(fmt.Sprintf("Using provided source image UUID: %s", config.ImageConfig.ImageUuid))
-		state.Put("config", config)
 		return multistep.ActionContinue
 	}
 
@@ -38,7 +40,6 @@ func (s *StepSourceImageValidate) Run(ctx context.Context, state multistep.State
 
 	config.ImageConfig.ImageUuid = images[0].UUID
 	ui.Say("Source image validated")
-	state.Put("config", config)
 	return multistep.ActionContinue
 }
 

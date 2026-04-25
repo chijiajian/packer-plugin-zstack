@@ -15,6 +15,9 @@ docs/stories/**
 docs/epic-automation_iac.md
 example/local-dev.pkr.hcl
 
+# locally built plugin binaries (packer init test layout)
+github.com/
+
 # local/private config
 .env
 .env.*

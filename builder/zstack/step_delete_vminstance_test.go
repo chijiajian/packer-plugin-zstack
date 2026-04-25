@@ -1,3 +1,6 @@
+// Copyright ZStack.io, Inc. 2013, 2026
+// SPDX-License-Identifier: MPL-2.0
+
 package zstack
 
 import (
@@ -37,32 +40,32 @@ func TestStepExpungeVmInstance_Run(t *testing.T) {
 		assert.Empty(t, config.InstanceUuid)
 	})
 
-	t.Run("DestroyErrorHalts", func(t *testing.T) {
+	t.Run("DestroyErrorWarnsAndContinues", func(t *testing.T) {
 		config := &Config{InstanceConfig: InstanceConfig{InstanceUuid: "vm-1"}}
 		driver := &MockDriver{DestroyVmInstanceErr: errors.New("destroy fail")}
 		state := testStateBag(config, driver)
 
 		action := (&StepExpungeVmInstance{}).Run(context.Background(), state)
 
-		assert.Equal(t, multistep.ActionHalt, action)
+		assert.Equal(t, multistep.ActionContinue, action)
 		assert.True(t, driver.DestroyVmInstanceCalled)
 		assert.False(t, driver.DeleteVmInstanceCalled)
 		_, ok := state.GetOk("error")
-		assert.True(t, ok)
+		assert.False(t, ok, "expunge cleanup failures must not poison build state")
 	})
 
-	t.Run("DeleteErrorHalts", func(t *testing.T) {
+	t.Run("DeleteErrorWarnsAndContinues", func(t *testing.T) {
 		config := &Config{InstanceConfig: InstanceConfig{InstanceUuid: "vm-1"}}
 		driver := &MockDriver{DeleteVmInstanceErr: errors.New("delete fail")}
 		state := testStateBag(config, driver)
 
 		action := (&StepExpungeVmInstance{}).Run(context.Background(), state)
 
-		assert.Equal(t, multistep.ActionHalt, action)
+		assert.Equal(t, multistep.ActionContinue, action)
 		assert.True(t, driver.DestroyVmInstanceCalled)
 		assert.True(t, driver.DeleteVmInstanceCalled)
 		_, ok := state.GetOk("error")
-		assert.True(t, ok)
+		assert.False(t, ok, "expunge cleanup failures must not poison build state")
 	})
 }
 

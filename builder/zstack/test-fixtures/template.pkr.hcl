@@ -1,4 +1,4 @@
-# Copyright (c) HashiCorp, Inc.
+# Copyright ZStack.io, Inc. 2013, 2026
 # SPDX-License-Identifier: MPL-2.0
 
 source "scaffolding-my-builder" "basic-example" {
