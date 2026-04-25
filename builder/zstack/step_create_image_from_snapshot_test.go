@@ -1,3 +1,6 @@
+// Copyright ZStack.io, Inc. 2013, 2026
+// SPDX-License-Identifier: MPL-2.0
+
 package zstack
 
 import (
@@ -151,6 +154,7 @@ func TestConfigPrepare_SnapshotMode(t *testing.T) {
 		err := c.Prepare()
 		if assert.Error(t, err) {
 			assert.Contains(t, err.Error(), "image_name")
+			assert.Contains(t, err.Error(), "backup_storage")
 		}
 	})
 
@@ -158,6 +162,19 @@ func TestConfigPrepare_SnapshotMode(t *testing.T) {
 		c := &Config{
 			AccessConfig: AccessConfig{Host: "h", AccountName: "a", AccountPassword: "p"},
 			ImageConfig:  ImageConfig{SourceVolumeSnapshotUuid: "snap-1", ImageName: "img"},
+		}
+		err := c.Prepare()
+		if assert.Error(t, err) {
+			assert.Contains(t, err.Error(), "backup_storage")
+		}
+	})
+
+	t.Run("MissingBackupStorageForVmBuild", func(t *testing.T) {
+		c := &Config{
+			AccessConfig:   AccessConfig{Host: "h", AccountName: "a", AccountPassword: "p"},
+			ImageConfig:    ImageConfig{ImageName: "img"},
+			NetworkConfig:  NetworkConfig{L3NetworkName: "net"},
+			InstanceConfig: InstanceConfig{InstanceName: "vm", InstanceOfferingName: "small"},
 		}
 		err := c.Prepare()
 		if assert.Error(t, err) {

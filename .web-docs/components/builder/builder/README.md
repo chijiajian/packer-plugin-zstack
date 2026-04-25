@@ -79,7 +79,7 @@
 
 ```hcl
 source "zstack" "example" {
-  zstack_host       = "https://zstack.example.com"
+  zstack_host       = "zstack.example.com"
   access_key_id     = env("ZSTACK_ACCESS_KEY_ID")
   access_key_secret = env("ZSTACK_ACCESS_KEY_SECRET")
 

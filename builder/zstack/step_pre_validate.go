@@ -1,3 +1,6 @@
+// Copyright ZStack.io, Inc. 2013, 2026
+// SPDX-License-Identifier: MPL-2.0
+
 package zstack
 
 import (
@@ -35,21 +38,13 @@ func (s *StepPreValidate) Run(ctx context.Context, state multistep.StateBag) mul
 		ui.Say("L3 network validated")
 	}
 
-	// source_image_url imports require backup storage for image download/import.
-	if config.SourceImageUrl != "" && config.BackupStorageConfig.BackupStorageUuid == "" && config.BackupStorageConfig.BackupStorageName == "" {
-		err := fmt.Errorf("backup_storage_name or backup_storage_uuid is required when source_image_url is set")
+	if config.BackupStorageConfig.BackupStorageUuid == "" && config.BackupStorageConfig.BackupStorageName == "" {
+		err := fmt.Errorf("backup_storage_name or backup_storage_uuid is required")
 		ui.Errorf("Backup storage validation failed: %s", err)
 		return multistep.ActionHalt
 	}
 
-	if snapshotOnly && config.BackupStorageConfig.BackupStorageUuid == "" && config.BackupStorageConfig.BackupStorageName == "" {
-		err := fmt.Errorf("backup_storage_name or backup_storage_uuid is required when source_volume_snapshot_uuid is set")
-		ui.Errorf("Backup storage validation failed: %s", err)
-		return multistep.ActionHalt
-	}
-
-	// AC-002-04: Skip backup storage query when backup_storage_uuid is provided
-	// AC-003-01: Backup storage is optional for non-import flows.
+	// AC-002-04: Skip backup storage query when backup_storage_uuid is provided.
 	if config.BackupStorageConfig.BackupStorageUuid != "" {
 		log.Printf("[INFO] Using provided backup storage UUID: %s", config.BackupStorageConfig.BackupStorageUuid)
 		ui.Say(fmt.Sprintf("Using provided backup storage UUID: %s", config.BackupStorageConfig.BackupStorageUuid))
@@ -61,12 +56,8 @@ func (s *StepPreValidate) Run(ctx context.Context, state multistep.StateBag) mul
 		}
 		config.BackupStorageConfig.BackupStorageUuid = backupStorages[0].UUID
 		ui.Say("Backup storage validated")
-	} else {
-		log.Printf("[INFO] No backup storage configured, image export will be skipped")
-		ui.Say("No backup storage configured, image export will be skipped")
 	}
 
-	state.Put("config", config)
 	return multistep.ActionContinue
 }
 

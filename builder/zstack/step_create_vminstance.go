@@ -1,3 +1,6 @@
+// Copyright ZStack.io, Inc. 2013, 2026
+// SPDX-License-Identifier: MPL-2.0
+
 package zstack
 
 import (
@@ -79,7 +82,6 @@ func (s *StepCreateVMInstance) Run(ctx context.Context, state multistep.StateBag
 	}
 	config.IP = instance.VmNics[0].Ip
 
-	state.Put("config", config)
 	log.Printf("[INFO] Successfully created VM instance (UUID: %s, IP: %s)", instance.UUID, config.IP)
 	ui.Say(fmt.Sprintf("Successfully created VM instance '%s' (UUID: %s, IP: %s)",
 		config.InstanceName, instance.UUID, config.IP))

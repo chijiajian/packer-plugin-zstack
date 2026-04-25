@@ -1,4 +1,7 @@
-# Build an image directly from an existing ZStack volume snapshot (no VM/SSH/provisioning).
+# Copyright ZStack.io, Inc. 2013, 2026
+# SPDX-License-Identifier: MPL-2.0
+
+# Build an image from an existing ZStack volume snapshot (no VM/SSH/provisioning).
 variable "zstack_host" {
   type    = string
   default = env("ZSTACK_HOST")

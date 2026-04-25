@@ -1,3 +1,6 @@
+// Copyright ZStack.io, Inc. 2013, 2026
+// SPDX-License-Identifier: MPL-2.0
+
 package zstack
 
 import (
@@ -5,12 +8,15 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/hashicorp/packer-plugin-sdk/template/config"
 	"github.com/hashicorp/packer-plugin-sdk/template/interpolate"
 	"github.com/zstackio/zstack-sdk-go-v2/pkg/client"
 	"github.com/zstackio/zstack-sdk-go-v2/pkg/param"
 )
+
+const defaultClientLoginTimeout = 30 * time.Second
 
 type AccessConfig struct {
 	Host            string `mapstructure:"zstack_host"`
@@ -92,7 +98,7 @@ func (c *AccessConfig) Prepare(raws ...interface{}) []error {
 	return nil
 }
 
-func (c *AccessConfig) CreateClient() (*client.ZSClient, error) {
+func (c *AccessConfig) CreateClient(debug bool) (*client.ZSClient, error) {
 	var cli *client.ZSClient
 
 	// PKR-001 Bug 1: Only set default port when not specified (was overwriting custom port)
@@ -100,14 +106,17 @@ func (c *AccessConfig) CreateClient() (*client.ZSClient, error) {
 		c.Port = 8080
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), defaultClientLoginTimeout)
+	defer cancel()
+
 	if c.AccountName != "" && c.AccountPassword != "" {
-		cli = client.NewZSClient(client.NewZSConfig(c.Host, c.Port, "zstack").LoginAccount(c.AccountName, c.AccountPassword).ReadOnly(false).Debug(false))
-		_, err := cli.Login(context.Background())
+		cli = client.NewZSClient(client.NewZSConfig(c.Host, c.Port, "zstack").LoginAccount(c.AccountName, c.AccountPassword).ReadOnly(false).Debug(debug))
+		_, err := cli.Login(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("unable to create ZStack API client: %s", err)
 		}
 	} else if c.AccessKeyId != "" && c.AccessKeySecret != "" {
-		cli = client.NewZSClient(client.NewZSConfig(c.Host, c.Port, "zstack").AccessKey(c.AccessKeyId, c.AccessKeySecret).ReadOnly(false).Debug(false))
+		cli = client.NewZSClient(client.NewZSConfig(c.Host, c.Port, "zstack").AccessKey(c.AccessKeyId, c.AccessKeySecret).ReadOnly(false).Debug(debug))
 		probe := param.NewQueryParam()
 		if _, err := cli.QueryZone(&probe); err != nil {
 			return nil, fmt.Errorf("unable to validate ZStack access key credentials: %s", err)
@@ -121,8 +130,8 @@ func (c *AccessConfig) CreateClient() (*client.ZSClient, error) {
 	return cli, nil
 }
 
-func (c *AccessConfig) Driver() (*ZStackDriver, error) {
-	cli, err := c.CreateClient()
+func (c *AccessConfig) Driver(debug bool) (*ZStackDriver, error) {
+	cli, err := c.CreateClient(debug)
 	if err != nil {
 		return nil, err
 	}

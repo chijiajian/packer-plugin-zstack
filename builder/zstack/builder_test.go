@@ -1,3 +1,6 @@
+// Copyright ZStack.io, Inc. 2013, 2026
+// SPDX-License-Identifier: MPL-2.0
+
 package zstack
 
 import (
@@ -37,7 +40,8 @@ func TestBuilderPrepare_UsesAccessConfigEnvVars(t *testing.T) {
 
 	var b Builder
 	_, _, err := b.Prepare(map[string]interface{}{
-		"communicator": "none",
+		"communicator":        "none",
+		"backup_storage_name": "local-backup",
 	})
 
 	assert.NoError(t, err)
@@ -96,6 +100,7 @@ func TestBuilderPrepare_ValidTimeouts(t *testing.T) {
 		"zstack_host":         "example.com",
 		"account_name":        "admin",
 		"account_password":    "pw",
+		"backup_storage_name": "local-backup",
 		"image_ready_timeout": "10m",
 		"vm_running_timeout":  "2m",
 	})

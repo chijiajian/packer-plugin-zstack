@@ -1,3 +1,6 @@
+// Copyright ZStack.io, Inc. 2013, 2026
+// SPDX-License-Identifier: MPL-2.0
+
 package zstack
 
 import (
@@ -76,7 +79,6 @@ func (s *StepExportImage) Run(ctx context.Context, state multistep.StateBag) mul
 	}
 
 	config.ImageUrl = res.view.ImageUrl
-	state.Put("config", config)
 	ui.Say("Successfully exported image: " + config.ImageUrl)
 	return multistep.ActionContinue
 }

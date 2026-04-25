@@ -1,4 +1,7 @@
 #!/usr/bin/env sh
+# Copyright ZStack.io, Inc. 2013, 2026
+# SPDX-License-Identifier: MPL-2.0
+
 set -eu
 
 echo "[load_images] start"

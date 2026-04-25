@@ -35,17 +35,17 @@ The plugin supports two authentication methods:
 
 You can build from resource names or use UUID passthrough with `image_uuid`, `network_uuid`, and `instance_offering_uuid` to skip name-based lookups.
 
-Optional backup storage settings let you export the resulting image when `backup_storage_name` or `backup_storage_uuid` is configured; if neither is set, the export step is skipped.
+Backup storage is required for image creation. The builder uses it when creating the image template from a volume snapshot, whether the snapshot is supplied explicitly via `source_volume_snapshot_uuid` or created automatically from the VM root volume during a normal build.
 
 Use `image_description` to set a custom description for the generated image.
 
-The plugin also supports building an image directly from an existing **volume snapshot** by setting `source_volume_snapshot_uuid`. In this mode no VM is created and SSH/provisioners are skipped — see [`example/from_snapshot.pkr.hcl`](example/from_snapshot.pkr.hcl).
+The plugin also supports building an image directly from an existing **volume snapshot** by setting `source_volume_snapshot_uuid`. In this mode no VM is created and SSH/provisioners are skipped; the builder creates the image template from that existing snapshot — see [`example/from_snapshot.pkr.hcl`](example/from_snapshot.pkr.hcl).
 
 See the [`example/`](example) directory for ready-to-run HCL examples covering account/password auth, AK/SK auth, and UUID passthrough.
 
 ## E2E Test Method
 
-Use the local E2E template and shell script to verify the full build flow (image import, VM create, SSH provision, image create):
+Use the local E2E template and shell script to verify the full build flow (image import, VM create, SSH provision, root-volume snapshot create, image create from snapshot):
 
 - Template: [`example/local-dev.pkr.hcl`](example/local-dev.pkr.hcl)
 - Provisioner script: [`example/load_images.sh`](example/load_images.sh)
@@ -92,9 +92,9 @@ PACKER_PLUGIN_PATH=$(pwd) packer validate example/local-dev.pkr.hcl
 PACKER_PLUGIN_PATH=$(pwd) packer build example/local-dev.pkr.hcl
 ```
 
-### Export Behavior
+### Backup Storage / Export Behavior
 
-- If `backup_storage_name`/`backup_storage_uuid` is missing while `source_image_url` is set, validation fails early.
+- `backup_storage_name` or `backup_storage_uuid` is required for both normal VM builds and `source_volume_snapshot_uuid` builds, because image creation now runs through the snapshot-to-template flow.
 - If backup storage does not support image export, export is skipped with a warning instead of failing the entire build.
 
 ### Configuration
