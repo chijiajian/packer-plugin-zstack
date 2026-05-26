@@ -19,8 +19,8 @@ To install this plugin, copy and paste this code into your Packer configuration.
 packer {
   required_plugins {
     zstack = {
-      version = ">= 2.0.0"
-      source  = "github.com/zstackio/zstack"
+      version = ">= 1.1.0"
+      source  = "github.com/chijiajian/zstack"
     }
   }
 }
