@@ -21,8 +21,8 @@ variable "access_key_secret" {
 packer {
   required_plugins {
     zstack = {
-      version = ">= 2.0.0"
-      source  = "github.com/zstackio/zstack"
+      version = ">= 1.1.0"
+      source  = "github.com/chijiajian/zstack"
     }
   }
 }
@@ -43,7 +43,7 @@ source "zstack" "aksk" {
 
   # Use cpu_num and memory_size instead of instance_offering_name
   cpu_num     = 2
-  memory_size = 4096  # in MB
+  memory_size = 4096 # in MB
 
   instance_name     = "packer-aksk"
   image_name        = "packer-aksk-image"

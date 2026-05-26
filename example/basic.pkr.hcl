@@ -26,8 +26,8 @@ variable "ssh_password" {
 packer {
   required_plugins {
     zstack = {
-      version = ">= 2.0.0"
-      source  = "github.com/zstackio/zstack"
+      version = ">= 1.1.0"
+      source  = "github.com/chijiajian/zstack"
     }
   }
 }
