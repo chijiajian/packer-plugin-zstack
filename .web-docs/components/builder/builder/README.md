@@ -66,7 +66,7 @@
 **Storage Parameters**
 - `backup_storage_name` (String) - Name of the backup storage for storing created images.
 
-- `backup_storage_uuid` (String) - UUID of the backup storage. Required for image creation because the builder now produces the final image template through the snapshot-to-template flow.
+- `backup_storage_uuid` (String) - UUID of the backup storage. Required for storing and exporting the created image.
 
 **SSH Parameters**
 - `ssh_username` (String) - SSH username for connecting to the created VM instance.
@@ -80,6 +80,7 @@
 -->
 ### Example Usage
 
+In the normal VM build path, the builder provisions the VM, stops it, and creates the final image directly from the stopped root volume.
 
 ```hcl
 source "zstack" "example" {

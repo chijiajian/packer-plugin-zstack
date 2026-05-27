@@ -7,7 +7,7 @@
 ## 功能概览
 
 - **两种构建路径**
-  - VM 构建：导入/选择源镜像 → 创建 VM → SSH 连接 → 执行 provisioner → 关机 → 创建快照 → 生成镜像 → 导出
+  - VM 构建：导入/选择源镜像 → 创建 VM → SSH 连接 → 执行 provisioner → 关机 → 从 root volume 生成镜像 → 导出
   - 快照直接构建（设置 `source_volume_snapshot_uuid`）：跳过 VM 创建、SSH 与 provisioner，直接基于已有卷快照生成镜像模板
 - **两种鉴权方式**
   - 账号密码：`account_name` + `account_password`
@@ -238,7 +238,7 @@ PACKER_PLUGIN_PATH=$(pwd) packer build    example/local-dev.pkr.hcl
 
 ## 行为约定
 
-- 备份存储参数必填（无论是常规构建还是快照构建），因为镜像通过 “快照 → 模板” 流程产生。
+- 备份存储参数必填（无论是常规构建还是快照构建），因为生成的镜像会存放在备份存储中，并可能从该备份存储导出。
 - 备份存储不支持导出时，构建会跳过导出步骤并打印警告，整个构建仍判定为成功。
 - 创建临时 SSH 密钥仅在 `ssh_password` 与 `ssh_private_key_file` 都未提供时发生，密钥仅保留在内存中。
 
