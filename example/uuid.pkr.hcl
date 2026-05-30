@@ -55,7 +55,7 @@ source "zstack" "uuid" {
 
   backup_storage_name = "local-backup"
 
-  # Backup storage is required because the builder now creates the final image via snapshot -> image.
+  # Backup storage is required to store and export the created image.
   ssh_username = "root"
   ssh_password = "your-ssh-password"
 }

@@ -35,7 +35,7 @@ The plugin supports two authentication methods:
 
 You can build from resource names or use UUID passthrough with `image_uuid`, `network_uuid`, and `instance_offering_uuid` to skip name-based lookups.
 
-Backup storage is required for image creation. The builder uses it when creating the image template from a volume snapshot, whether the snapshot is supplied explicitly via `source_volume_snapshot_uuid` or created automatically from the VM root volume during a normal build.
+Backup storage is required for image creation and export. In the normal VM build path, the builder stops the VM and creates the image template directly from the stopped root volume. When `source_volume_snapshot_uuid` is set, the builder creates the template from that existing volume snapshot instead.
 
 Use `image_description` to set a custom description for the generated image.
 
@@ -45,7 +45,7 @@ See the [`example/`](example) directory for ready-to-run HCL examples covering a
 
 ## E2E Test Method
 
-Use the local E2E template and shell script to verify the full build flow (image import, VM create, SSH provision, root-volume snapshot create, image create from snapshot):
+Use the local E2E template and shell script to verify the full build flow (image import, VM create, SSH provision, VM stop, image create from root volume):
 
 - Template: [`example/local-dev.pkr.hcl`](example/local-dev.pkr.hcl)
 - Provisioner script: [`example/load_images.sh`](example/load_images.sh)
@@ -94,7 +94,7 @@ PACKER_PLUGIN_PATH=$(pwd) packer build example/local-dev.pkr.hcl
 
 ### Backup Storage / Export Behavior
 
-- `backup_storage_name` or `backup_storage_uuid` is required for both normal VM builds and `source_volume_snapshot_uuid` builds, because image creation now runs through the snapshot-to-template flow.
+- `backup_storage_name` or `backup_storage_uuid` is required for both normal VM builds and `source_volume_snapshot_uuid` builds, because the generated image is stored in backup storage and may be exported from it.
 - If backup storage does not support image export, export is skipped with a warning instead of failing the entire build.
 
 ### Configuration

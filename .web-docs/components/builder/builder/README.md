@@ -18,7 +18,7 @@
 
 - `access_key_id` (String) AccessKey ID for ZStack API. Create AccessKey ID from MN,  Operational Management->Access Control->AccessKey Management. May also be provided via ZSTACK_ACCESS_KEY_ID environment variable. Required if using AccessKey authentication. Mutually exclusive with `account_name` and `account_password`.
 - `access_key_secret` (String, Sensitive) AccessKey Secret for ZStack API. May also be provided via ZSTACK_ACCESS_KEY_SECRET environment variable. Required if using AccessKey authentication. Mutually exclusive with `account_name` and `account_password`.
-- `account_name` (String) Username for ZStack API. May also be provided via ZSTACK_ACCOUN_TNAME environment variable. Required if using Account authentication.  Only supports the platform administrator account (`admin`). Mutually exclusive with `access_key_id` and `access_key_secret`. Using `access_key_id` and `access_key_secret` is the recommended approach for authentication, as it provides more flexibility and security.
+- `account_name` (String) Username for ZStack API. May also be provided via ZSTACK_ACCOUNT_NAME environment variable. Required if using Account authentication.  Only supports the platform administrator account (`admin`). Mutually exclusive with `access_key_id` and `access_key_secret`. Using `access_key_id` and `access_key_secret` is the recommended approach for authentication, as it provides more flexibility and security.
 - `account_password` (String, Sensitive) Password for ZStack API. May also be provided via ZSTACK_ACCOUNT_PASSWORD environment variable.Required if using Account authentication.  Only supports the platform administrator account (`admin`). Mutually exclusive with `access_key_id` and `access_key_secret`. Using `access_key_id` and `access_key_secret` is the recommended approach for authentication, as it provides more flexibility and security.
 - `port` (Number) ZStack Cloud MN API port. May also be provided via ZSTACK_PORT environment variable.
 
@@ -37,9 +37,13 @@
 
 - `guest_os_type` (String) - Guest OS type, such as "Ubuntu", "CentOS", etc.
 
+- `architecture` (String) - CPU architecture of the image, such as "x86_64", "aarch64".
+
 - `image_name` (String) - Name of the target image to be created.
 
 - `image_description` (String) - Description for the created image. Defaults to the image name if not set.
+
+- `source_volume_snapshot_uuid` (String) - UUID of an existing ZStack volume snapshot. When set, the builder creates a root volume template from that existing snapshot and skips VM creation, SSH connection, and provisioners. Requires `image_name` and one of `backup_storage_name` / `backup_storage_uuid`.
 
 **Network Parameters**
 
@@ -62,7 +66,7 @@
 **Storage Parameters**
 - `backup_storage_name` (String) - Name of the backup storage for storing created images.
 
-- `backup_storage_uuid` (String) - UUID of the backup storage. Optional - when neither backup_storage_name nor backup_storage_uuid is specified, the image export step is skipped.
+- `backup_storage_uuid` (String) - UUID of the backup storage. Required for storing and exporting the created image.
 
 **SSH Parameters**
 - `ssh_username` (String) - SSH username for connecting to the created VM instance.
@@ -76,6 +80,7 @@
 -->
 ### Example Usage
 
+In the normal VM build path, the builder provisions the VM, stops it, and creates the final image directly from the stopped root volume.
 
 ```hcl
 source "zstack" "example" {
@@ -102,4 +107,28 @@ source "zstack" "example" {
   ssh_password = "your-ssh-password"
 }
 
+```
+
+### Example: Build From Volume Snapshot
+
+Skip VM creation entirely and build an image from an existing volume snapshot. No SSH connection or provisioners are required:
+
+```hcl
+source "zstack" "from_snapshot" {
+  zstack_host      = "zstack.example.com"
+  account_name     = env("ZSTACK_ACCOUNT_NAME")
+  account_password = env("ZSTACK_ACCOUNT_PASSWORD")
+
+  source_volume_snapshot_uuid = "snapshot-uuid-here"
+
+  image_name          = "packer-from-snapshot-image"
+  image_description   = "Built from ZStack volume snapshot"
+  platform            = "Linux"
+  architecture        = "x86_64"
+  backup_storage_name = "local-backup"
+}
+
+build {
+  sources = ["source.zstack.from_snapshot"]
+}
 ```
