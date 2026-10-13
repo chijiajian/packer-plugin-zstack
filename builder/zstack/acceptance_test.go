@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -18,16 +19,17 @@ func TestAcceptanceCloud(t *testing.T) {
 	if os.Getenv("ZSTACK_ACC") != "1" {
 		t.Skip("set ZSTACK_ACC=1 and ZSTACK_ACC_* resource IDs to run cloud acceptance")
 	}
-	for _, key := range []string{"ZSTACK_ACC_IMAGE_UUID", "ZSTACK_ACC_NETWORK_UUID", "ZSTACK_ACC_BACKUP_STORAGE_UUID"} {
+	for _, key := range []string{"ZSTACK_ACC_NETWORK_UUID", "ZSTACK_ACC_BACKUP_STORAGE_UUID"} {
 		require.NotEmpty(t, os.Getenv(key), key)
 	}
-	name := fmt.Sprintf("packer-quality-%d", time.Now().Unix())
+	imageUUID, imageURL := os.Getenv("ZSTACK_ACC_IMAGE_UUID"), os.Getenv("ZSTACK_ACC_IMAGE_URL")
+	require.True(t, (imageUUID != "") != (imageURL != ""), "set exactly one of ZSTACK_ACC_IMAGE_UUID and ZSTACK_ACC_IMAGE_URL")
+	name := fmt.Sprintf("packer-quality-%d", time.Now().UnixNano())
 	comm := os.Getenv("ZSTACK_ACC_COMMUNICATOR")
 	if comm == "" {
 		comm = "none"
 	}
 	raw := map[string]interface{}{
-		"image_uuid":          os.Getenv("ZSTACK_ACC_IMAGE_UUID"),
 		"network_uuid":        os.Getenv("ZSTACK_ACC_NETWORK_UUID"),
 		"backup_storage_uuid": os.Getenv("ZSTACK_ACC_BACKUP_STORAGE_UUID"),
 		"instance_name":       name, "image_name": name,
@@ -36,9 +38,17 @@ func TestAcceptanceCloud(t *testing.T) {
 		"api_timeout": "10m", "cleanup_timeout": "5m",
 		"skip_export": os.Getenv("ZSTACK_ACC_SKIP_EXPORT") == "1",
 	}
+	if imageURL != "" {
+		raw["source_image_url"] = imageURL
+		raw["source_image"] = name + "-source"
+		raw["architecture"] = "x86_64"
+	} else {
+		raw["image_uuid"] = imageUUID
+	}
 	if comm == "ssh" {
 		raw["ssh_username"] = os.Getenv("ZSTACK_ACC_SSH_USERNAME")
-		raw["ssh_timeout"] = "3m"
+		raw["ssh_password"] = os.Getenv("ZSTACK_ACC_SSH_PASSWORD")
+		raw["ssh_timeout"] = "5m"
 		raw["ssh_clear_authorized_keys"] = true
 	}
 	if disk := os.Getenv("ZSTACK_ACC_DATA_DISK_OFFERING_UUID"); disk != "" {
@@ -50,7 +60,7 @@ func TestAcceptanceCloud(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 	ui := &packersdk.BasicUi{Reader: os.Stdin, Writer: os.Stdout, ErrorWriter: os.Stderr}
-	hook := &acceptanceHook{ssh: comm == "ssh"}
+	hook := &acceptanceHook{ssh: comm == "ssh", expectedUser: os.Getenv("ZSTACK_ACC_SSH_USERNAME")}
 	scenario := os.Getenv("ZSTACK_ACC_SCENARIO")
 	var cancelledVM string
 	if scenario == "cancel" {
@@ -106,17 +116,24 @@ func TestAcceptanceCloud(t *testing.T) {
 	require.NotNil(t, artifact)
 	require.Empty(t, b.config.InstanceUuid, "temporary VM must be expunged")
 	require.Empty(t, artifact.State("cleanup_warnings"))
-	// Input remains available after the temporary VM was expunged.
+	// Existing input is preserved; an image imported by this build is removed.
 	d, err := b.config.AccessConfig.driver(ctx, time.Minute)
 	require.NoError(t, err)
-	source, err := d.GetImage(os.Getenv("ZSTACK_ACC_IMAGE_UUID"))
-	require.NoError(t, err)
-	require.Equal(t, "Ready", source.Status)
+	if imageUUID != "" {
+		source, err := d.GetImage(imageUUID)
+		require.NoError(t, err)
+		require.Equal(t, "Ready", source.Status)
+	} else {
+		sources, err := d.QueryImage(name + "-source")
+		require.NoError(t, err)
+		require.Empty(t, sources, "temporary imported source image must be expunged")
+	}
 }
 
 type acceptanceHook struct {
-	ssh   bool
-	after func(context.Context) error
+	ssh          bool
+	expectedUser string
+	after        func(context.Context) error
 }
 
 func (h *acceptanceHook) Run(ctx context.Context, name string, ui packersdk.Ui, comm packersdk.Communicator, data interface{}) error {
@@ -124,12 +141,16 @@ func (h *acceptanceHook) Run(ctx context.Context, name string, ui packersdk.Ui, 
 		return nil
 	}
 	if h.ssh {
-		cmd := &packersdk.RemoteCmd{Command: "uname -m && test -r /etc/os-release"}
+		var output strings.Builder
+		cmd := &packersdk.RemoteCmd{Command: "id -un && uname -m && test -r /etc/os-release", Stdout: &output}
 		if err := cmd.RunWithUi(ctx, comm, ui); err != nil {
 			return err
 		}
 		if cmd.ExitStatus() != 0 {
 			return fmt.Errorf("acceptance command exited %d", cmd.ExitStatus())
+		}
+		if !strings.HasPrefix(output.String(), h.expectedUser+"\n") {
+			return fmt.Errorf("SSH connected as an unexpected user")
 		}
 	}
 	if h.after != nil {

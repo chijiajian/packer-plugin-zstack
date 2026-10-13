@@ -73,8 +73,8 @@ v0.0.10 的 `pkg/util/httputils/httputils.go:requestInternal` 使用 `http.NewRe
 | 本次临时根盘快照 → 模板 | 通过 | 在本次 VM 上创建临时快照，独立快照构建输出 Ready；删除输出及测试快照 |
 | 导出副本 → 镜像删除顺序 | 通过 | 第二轮 147 秒；先 DeleteExportedImageFromBackupStorage，再 delete/expunge 镜像 |
 | 取消构建 + 临时数据盘 | 通过 | 在 provision hook 取消；返回 context.Canceled、无产物、VM 已 expunge；数据盘清理无告警，见最终库存核查 |
-| SSH root 用户 | 未通过 | 网络在 VM 启动后可达，但 root 公钥认证失败；3 分钟超时后 VM 清理完成 |
-| SSH ubuntu 用户 | 未通过 | 与 root 一样公钥认证失败；GetVmSshKey 已确认服务端收到公钥，不能仅据此断定客户机已应用；超时后 VM 清理完成 |
+| 旧源镜像 SSH root 用户 | 未通过 | 网络在 VM 启动后可达，但 root 公钥认证失败；3 分钟超时后 VM 清理完成 |
+| 旧源镜像 SSH ubuntu 用户 | 未通过 | 与 root 一样公钥认证失败；GetVmSshKey 已确认服务端收到公钥，不能仅据此断定客户机已应用；超时后 VM 清理完成 |
 | ARM | 未执行 | 环境只有 x86_64 主机；architecture 传参与 HCL 有自动回归测试 |
 | WinRM、bastion、ImageStore、多网络/放置组合 | 未进行云端验证 | HCL/参数契约测试覆盖；需要对应镜像和基础设施 |
 
@@ -90,8 +90,20 @@ v0.0.10 的 `pkg/util/httputils/httputils.go:requestInternal` 使用 `http.NewRe
 
 - 最终库存核查：本次 `packer-quality-*` VM、镜像、快照及对应根盘查询均为 0；取消测试时间之后的新建数据盘查询无残留；原源镜像仍为 Ready。此结论不涵盖上文首轮导出副本的存储文件。
 - 安全核查：`.env` 权限 `0600`，`git check-ignore` 命中，`git ls-files .env` 为空；逐文件比对本次 AK/SK，Git 可见文件匹配数为 0。凭证和验收日志不进入提交；代码通过 PR 提交审核，本次不发布版本。
-- **Q12-A（待环境输入）**：提供已确认可用的 SSH 用户/认证方式或支持 cloud-init 的源镜像，复验 SSH provisioner 及临时密钥清理。当前 API 已保存公钥，root/ubuntu 均认证失败，原因不能仅靠管理 API 确定。
+- **Q12-A（密码认证通过；密钥路径待合适镜像）**：用户提供的两套镜像已完成非 root/root 密码认证及 SSH provision hook 全流程验收。Ubuntu20.04 镜像已确认禁用 cloud-init，无法用它验证自动密钥注入与清理；需启用且正确配置 cloud-init 的镜像再验该路径。旧源镜像的公钥失败记录作为历史证据保留。
 - **Q12-B（待环境）**：ARM、Windows/WinRM、bastion、ImageStore、多网卡和放置组合的真实验收。当前覆盖为本地 HCL/参数/生命周期回归，不代表全部部署组合通过。
 - **Q12-C（待存储核查）**：确认首轮已 expunge 镜像 `5389ceda4d92410983de461dbe883ba5` 的导出副本是否残留；管理 API 因 ImageVO 不存在无法删除。后续轮次已验证先删除副本的修复流程。
 
 SSH systemTag 请求格式已与[官方 CreateVmInstance 文档](https://www.zstack.io/docs/4.3.6/html5-en/ZStack_Dev_Guide/topic/ZStack_2.1_Dev_Guide_0039.html)核对：传递公钥明文；userdata 另外进行 base64 编码。
+
+### SSH 补充验收（用户提供基础镜像后）
+
+验收脚本现在支持 `ZSTACK_ACC_IMAGE_URL` / `ZSTACK_ACC_IMAGE_UUID` 二选一、可选 `ZSTACK_ACC_SSH_PASSWORD`，并断言实际 SSH 用户与配置一致。镜像地址、用户名和密码保存在本机 `.env`，不写入仓库。
+
+- **Ubuntu20.04 非 root 密码认证：通过**。212 秒，覆盖约 4 GB qcow2 的 URL 导入、SSH 登录、`id -un` / `uname -m` / 系统文件检查、停止 VM、制镜像、导出、导出副本删除、VM/源镜像/产物清理。
+- **同一 Ubuntu20.04 镜像的临时密钥认证：镜像前置条件不满足**。通过密码登录本次测试 VM，只读确认 `/etc/cloud/cloud-init.disabled` 存在，`cloud-init status` 为 `disabled`，普通用户与 root 的 authorized_keys 中均无 Packer 临时公钥，实例数据源为 `iid-datasource-none`。因此密码成功不能视为自动密钥注入/清理通过；本次不修改基础镜像的 cloud-init 设置。
+- **root 密码认证镜像：通过**。503 秒，源文件约 9.5 GB，qcow2 虚拟磁盘 60 GiB；URL 导入、实际 root 身份及远程命令、制镜像、导出、导出副本/VM/源镜像/产物清理全部完成。
+
+自动密钥认证要求客户机能够处理云平台的公钥注入，并配置正确的 SSH 用户；禁用 cloud-init 的镜像可使用已有密码或私钥认证。
+
+补充验收收尾：两轮密码构建通过；密钥场景因已确认的 cloud-init 禁用而超时失败，失败后的 VM 与导入镜像已清理。最终 API 查询本次测试 VM、镜像和根盘均为 0。`go test -race ./...`、`go vet ./...`、`git diff --check` 通过；新提供的具体密码与私有镜像 URL 未出现在 Git 可见文件中，`.env` 保持 0600 且不被跟踪。

@@ -261,3 +261,7 @@ PACKER_PLUGIN_PATH=$(pwd) packer build    example/local-dev.pkr.hcl
 - 完整 HCL communicator schema 支持 SSH bastion、WinRM host/port/TLS。`ssh_clear_authorized_keys = true` 可在制镜像前清理临时公钥；自有私钥和 SSH agent 不会被自动生成密钥覆盖。快照路径只允许 `communicator = "none"`，源快照必须为 Ready、Enabled、Root。
 
 本地验证：`make test plugin-check`；重建 HCL schema：`go generate ./...`。真实云端测试需显式设置 `ZSTACK_ACC=1`、`ZSTACK_ACC_IMAGE_UUID`、`ZSTACK_ACC_NETWORK_UUID`、`ZSTACK_ACC_BACKUP_STORAGE_UUID`，然后执行 `go test ./builder/zstack -run '^TestAcceptanceCloud$' -v -count=1 -timeout=35m`。此测试会创建临时资源并清理镜像产物；默认不连接 SSH，设置 `ZSTACK_ACC_COMMUNICATOR=ssh` 与 `ZSTACK_ACC_SSH_USERNAME` 可验证 SSH。环境须具备对应资源权限及可用容量。
+
+URL 导入验收可设置 `ZSTACK_ACC_IMAGE_URL` 替代 `ZSTACK_ACC_IMAGE_UUID`，两者必须且只能选一个。SSH 验收设置 `ZSTACK_ACC_SSH_PASSWORD` 使用密码认证，留空则测试自动生成密钥。镜像地址与凭证保留在被忽略的本机 `.env`；测试会核对实际 SSH 用户、通过 provision hook 执行系统命令，并确认临时导入镜像被清理。
+
+自动生成密钥认证要求客户机能处理云平台的公钥注入（例如启用且正确配置的 cloud-init），并使用对应 SSH 用户。密码登录成功不代表密钥注入可用；cloud-init 禁用的镜像应使用已有密码或私钥认证。
