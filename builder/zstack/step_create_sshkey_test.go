@@ -5,6 +5,10 @@ package zstack
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
 	"os"
 	"strings"
 	"testing"
@@ -31,7 +35,9 @@ func TestStepCreateSSHKey_Run(t *testing.T) {
 		tmpFile, err := os.CreateTemp(t.TempDir(), "ssh-private-key-*.pem")
 		assert.NoError(t, err)
 
-		privateKey := []byte("-----BEGIN RSA PRIVATE KEY-----\ndummy\n-----END RSA PRIVATE KEY-----")
+		key, e := rsa.GenerateKey(rand.Reader, 2048)
+		assert.NoError(t, e)
+		privateKey := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
 		_, err = tmpFile.Write(privateKey)
 		assert.NoError(t, err)
 		assert.NoError(t, tmpFile.Close())
@@ -45,6 +51,7 @@ func TestStepCreateSSHKey_Run(t *testing.T) {
 
 		assert.Equal(t, multistep.ActionContinue, action)
 		assert.Equal(t, privateKey, config.Comm.SSHPrivateKey)
+		assert.Contains(t, config.SshKey, "ssh-rsa ")
 	})
 
 	t.Run("ExistingPrivateKeyFileNotFound", func(t *testing.T) {

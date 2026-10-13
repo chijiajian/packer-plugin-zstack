@@ -18,7 +18,9 @@ type StepCreateImageFromSnapshot struct{}
 func (s *StepCreateImageFromSnapshot) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {
 	ui := state.Get("ui").(packersdk.Ui)
 	config := state.Get("config").(*Config)
-	driver := state.Get("driver").(Driver)
+	ctx, cancel := context.WithTimeout(ctx, config.ImageReadyTimeout())
+	defer cancel()
+	driver := stepDriver(ctx, state)
 
 	snapshotUuid := config.SourceVolumeSnapshotUuid
 	if snapshotUuid == "" {
@@ -41,6 +43,9 @@ func (s *StepCreateImageFromSnapshot) Run(ctx context.Context, state multistep.S
 		ui.Error(fmt.Sprintf("Failed to get volume snapshot: %v", err))
 		state.Put("error", err)
 		return multistep.ActionHalt
+	}
+	if snapshot == nil || snapshot.Status != "Ready" || snapshot.State != "Enabled" || snapshot.VolumeType != "Root" {
+		return halt(state, fmt.Errorf("snapshot must be a Ready, Enabled root-volume snapshot"))
 	}
 	log.Printf("[INFO] Snapshot %s status=%s state=%s volumeType=%s", snapshot.UUID, snapshot.Status, snapshot.State, snapshot.VolumeType)
 
@@ -72,6 +77,10 @@ func (s *StepCreateImageFromSnapshot) Run(ctx context.Context, state multistep.S
 		createParam.Params.Architecture = &arch
 	}
 
+	r := resources(state)
+	r.Image = newResource()
+	createParam.Params.ResourceUuid = &r.Image.UUID
+	ui.Say(fmt.Sprintf("Tracking image resource UUID: %s", r.Image.UUID))
 	image, err := driver.CreateImageFromVolumeSnapshot(snapshotUuid, createParam)
 	if err != nil {
 		ui.Error(fmt.Sprintf("Failed to create image from snapshot: %v", err))
@@ -80,6 +89,11 @@ func (s *StepCreateImageFromSnapshot) Run(ctx context.Context, state multistep.S
 		return multistep.ActionHalt
 	}
 
+	if image == nil || image.UUID == "" {
+		return halt(state, fmt.Errorf("image creation returned empty inventory"))
+	}
+	r.Image.UUID = image.UUID
+	r.Image.Created = true
 	config.ImageUuid = image.UUID
 
 	log.Printf("[INFO] Successfully created image with UUID: %s from snapshot %s", image.UUID, snapshotUuid)
@@ -87,4 +101,9 @@ func (s *StepCreateImageFromSnapshot) Run(ctx context.Context, state multistep.S
 	return multistep.ActionContinue
 }
 
-func (s *StepCreateImageFromSnapshot) Cleanup(state multistep.StateBag) {}
+func (s *StepCreateImageFromSnapshot) Cleanup(state multistep.StateBag) {
+	config := state.Get("config").(*Config)
+	if buildFailed(state) && !config.KeepImageOnError {
+		cleanupImage(state, &resources(state).Image)
+	}
+}

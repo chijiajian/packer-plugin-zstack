@@ -112,3 +112,19 @@ documentation located in the [`docs/`](docs) directory.
   fix a bug, please do so by opening a Pull Request in this GitHub repository.
   In case of feature contribution, we kindly ask you to open an issue to
   discuss it beforehand.
+
+## Quality fixes and upgrade (2026-10)
+
+This development version uses **Go 1.26.9**, **ZStack SDK v0.0.10**, and **Packer Plugin SDK v0.6.12**. See the [task and acceptance record](docs/stories/STORY-PKR-QUALITY-20261013.md). The `go-cty` replacement remains necessary for the SDK's HCL generator.
+
+Environment variables are defaults; explicit configuration wins. Use one authentication method. Copy `.env.example` to `.env`, restrict it with `chmod 600 .env`, and load it with `set -a; source .env; set +a`. Packer does not load dotenv files itself. `.env` and `.acceptance/` are ignored by Git.
+
+Failed or cancelled builds now return no artifact. Only a newly created, ready output image is owned by the artifact; existing source images and snapshots are never deleted. `Files()` is empty for remote images; use `Id()`, `State("image_uuid")`, and `State("image_url")`. Temporary VMs and their newly created data disks are destroyed and expunged. Imported source images are cleaned unless `keep_source_image = true`; failed output images are cleaned unless `keep_image_on_error = true`. Cleanup failures report resource UUIDs and appear in `State("cleanup_warnings")`. A server-side asynchronous create can outlive cancellation: inspect the reported UUID before retrying.
+
+`api_timeout` defaults to `30m`; `cleanup_timeout` defaults to `5m`. `image_ready_timeout` and `vm_running_timeout` default to `5m` and now also bound their corresponding create requests. Increase these for large images. The plugin keeps SDK models but uses cancellable HTTP requests and job polling because the SDK transport does not bind its context. `skip_export = true` disables export. Only explicit unsupported-export errors are downgraded; permission and storage errors fail the build.
+
+Optional placement and disk settings are `zone_uuid`, `cluster_uuid`, `host_uuid`, `root_disk_offering_uuid`, and `data_disk_offering_uuids`. `network_uuids` enables multiple NICs and is exclusive with the singular network selectors; `default_network_uuid` chooses the default NIC. Output templates contain the root disk only. Required inputs, conflicting sources and duplicate resource names are validated early. Snapshot sources must be Ready, Enabled root-volume snapshots, with communicator `none`.
+
+The generated HCL schema includes the full SSH/WinRM options, including bastion and WinRM TLS/port. Use `ssh_clear_authorized_keys = true` to remove the temporary public key before creating the image. Existing private-key and agent authentication are preserved.
+
+Run `make test plugin-check` locally and `go generate ./...` to regenerate the HCL schema. Cloud acceptance is opt-in: set `ZSTACK_ACC=1`, `ZSTACK_ACC_IMAGE_UUID`, `ZSTACK_ACC_NETWORK_UUID`, `ZSTACK_ACC_BACKUP_STORAGE_UUID`, and the usual credentials, then run `go test ./builder/zstack -run '^TestAcceptanceCloud$' -v -count=1 -timeout=35m`. This creates temporary cloud resources and deletes its output image. Set `ZSTACK_ACC_COMMUNICATOR=ssh` and `ZSTACK_ACC_SSH_USERNAME` to exercise SSH; otherwise the communicator is disabled.

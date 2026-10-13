@@ -1,0 +1,22 @@
+name: Test
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+      - uses: actions/setup-go@93397bea11091df50f3d7e59dc26a7711a8bcfbe # v4.1.0
+        with:
+          go-version-file: .go-version
+      - run: make test plugin-check
+      - name: Check formatting, module graph and generated schema
+        run: |
+          test -z "$(gofmt -l builder version main.go)"
+          go mod tidy
+          go generate ./...
+          git diff --exit-code -- go.mod go.sum builder/zstack/config.hcl2spec.go

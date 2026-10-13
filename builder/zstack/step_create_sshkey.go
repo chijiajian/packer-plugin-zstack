@@ -10,7 +10,9 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+	"github.com/google/uuid"
 	"os"
+	"strings"
 
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
 	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
@@ -41,9 +43,20 @@ func (s *StepCreateSSHKey) Run(ctx context.Context, state multistep.StateBag) mu
 			return multistep.ActionHalt
 		}
 		config.Comm.SSHPrivateKey = privateKeyBytes
+		if config.SshKey == "" {
+			signer, err := ssh.ParsePrivateKey(privateKeyBytes)
+			if err != nil {
+				return halt(state, fmt.Errorf("configured SSH private key cannot be parsed: %w", err))
+			}
+			config.SshKey = strings.TrimSpace(string(ssh.MarshalAuthorizedKey(signer.PublicKey())))
+		}
 		return multistep.ActionContinue
 	}
 
+	if config.Comm.SSHAgentAuth {
+		ui.Message("Using SSH agent")
+		return multistep.ActionContinue
+	}
 	ui.Say("Creating temporary SSH key for instance...")
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
@@ -73,6 +86,8 @@ func (s *StepCreateSSHKey) Run(ctx context.Context, state multistep.StateBag) mu
 	if config.Comm.SSHPublicKey[len(config.Comm.SSHPublicKey)-1] == '\n' {
 		config.Comm.SSHPublicKey = config.Comm.SSHPublicKey[:len(config.Comm.SSHPublicKey)-1]
 	}
+	config.Comm.SSHTemporaryKeyPairName = "packer-" + uuid.NewString()
+	config.Comm.SSHPublicKey = append(config.Comm.SSHPublicKey, []byte(" "+config.Comm.SSHTemporaryKeyPairName)...)
 	config.SshKey = string(config.Comm.SSHPublicKey)
 
 	if s.Debug {

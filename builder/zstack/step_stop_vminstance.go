@@ -17,7 +17,7 @@ type StepStopVmInstance struct {
 func (s *StepStopVmInstance) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {
 	ui := state.Get("ui").(packersdk.Ui)
 	config := state.Get("config").(*Config)
-	driver := state.Get("driver").(Driver)
+	driver := stepDriver(ctx, state)
 
 	instanceUuid := config.InstanceUuid
 	ui.Say(fmt.Sprintf("Stopping VM instance '%s'...", instanceUuid))
@@ -32,6 +32,9 @@ func (s *StepStopVmInstance) Run(ctx context.Context, state multistep.StateBag) 
 		return multistep.ActionHalt
 	}
 
+	if vmInstance == nil || vmInstance.State != "Stopped" {
+		return halt(state, fmt.Errorf("VM did not reach Stopped state"))
+	}
 	ui.Say(fmt.Sprintf("Successfully stopped VM instance '%s'", vmInstance.Name))
 	return multistep.ActionContinue
 }

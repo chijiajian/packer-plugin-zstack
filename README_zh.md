@@ -246,3 +246,18 @@ PACKER_PLUGIN_PATH=$(pwd) packer build    example/local-dev.pkr.hcl
 
 - 发现 Bug 或对使用有疑问，请在 GitHub Issue 中反馈。
 - 欢迎 PR；功能性改动请先开 Issue 讨论。
+
+## 质量修复与升级（2026-10）
+
+本次开发版本使用 Go **1.26.9**、ZStack SDK **v0.0.10**、Packer Plugin SDK **v0.6.12**。任务与验收状态见 [质量任务文档](docs/stories/STORY-PKR-QUALITY-20261013.md)。`go-cty` 替换保留，以兼容 Packer SDK 的 HCL 生成工具。
+
+- 环境变量仅作为默认值，显式 HCL 配置优先；两种认证方式不可混用。将凭证存入本机 `.env`（权限 `0600`），再执行 `set -a; source .env; set +a`。`.env` 与 `.acceptance/` 均被 Git 忽略；请勿使用 `git add -f` 添加凭证。
+- 必须指定目标镜像名、备份存储，以及有效的镜像或根盘快照来源。VM 路径还需要实例名、网络和实例规格（或正数 CPU/内存）。名称查询匹配多个资源时必须改用 UUID。
+- 失败或取消不再返回源镜像作为产物。只有本次创建且 Ready 的目标镜像可作为 Artifact。远程镜像的 `Files()` 为空；使用 `Id()` 或 `State("image_uuid")`，导出链接读取 `State("image_url")`。
+- 临时 VM 默认 destroy + expunge；新建数据盘也会删除。临时 URL 导入镜像默认清理，设 `keep_source_image = true` 可保留；失败产物设 `keep_image_on_error = true` 可保留。已有源镜像与快照始终不删除。清理异常在日志和 `State("cleanup_warnings")` 中报告 UUID；服务端异步创建可能在本地取消后完成，应按 UUID 核查，不能仅按名称删除。
+- `api_timeout` 默认 `30m`，`cleanup_timeout` 默认 `5m`。`image_ready_timeout`、`vm_running_timeout` 默认 `5m`，现在也约束对应创建调用；大镜像应显式增加。SDK 底层未传递 context，插件使用可取消 HTTP 请求和异步轮询补齐。
+- `skip_export = true` 跳过导出。仅明确不支持导出的存储会自动降级；权限、容量等错误会使构建失败。
+- `network_uuids` 可指定多个网络（与 `network_name`/`network_uuid` 互斥），`default_network_uuid` 选择默认网卡。可选 `zone_uuid`、`cluster_uuid`、`host_uuid`、`root_disk_offering_uuid`、`data_disk_offering_uuids`。产物只包含根盘；数据盘内容不会进入模板。
+- 完整 HCL communicator schema 支持 SSH bastion、WinRM host/port/TLS。`ssh_clear_authorized_keys = true` 可在制镜像前清理临时公钥；自有私钥和 SSH agent 不会被自动生成密钥覆盖。快照路径只允许 `communicator = "none"`，源快照必须为 Ready、Enabled、Root。
+
+本地验证：`make test plugin-check`；重建 HCL schema：`go generate ./...`。真实云端测试需显式设置 `ZSTACK_ACC=1`、`ZSTACK_ACC_IMAGE_UUID`、`ZSTACK_ACC_NETWORK_UUID`、`ZSTACK_ACC_BACKUP_STORAGE_UUID`，然后执行 `go test ./builder/zstack -run '^TestAcceptanceCloud$' -v -count=1 -timeout=35m`。此测试会创建临时资源并清理镜像产物；默认不连接 SSH，设置 `ZSTACK_ACC_COMMUNICATOR=ssh` 与 `ZSTACK_ACC_SSH_USERNAME` 可验证 SSH。环境须具备对应资源权限及可用容量。

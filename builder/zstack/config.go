@@ -19,7 +19,11 @@ import (
 const (
 	defaultImageReadyTimeout = 5 * time.Minute
 	defaultVmRunningTimeout  = 5 * time.Minute
+	defaultAPITimeout        = 30 * time.Minute
+	defaultCleanupTimeout    = 5 * time.Minute
 )
+
+//go:generate go tool packer-sdc mapstructure-to-hcl2 -type Config
 
 type Config struct {
 	common.PackerConfig    `mapstructure:",squash"`
@@ -34,6 +38,13 @@ type Config struct {
 	BackupStorageConfig `mapstructure:",squash"`
 	ExportImageResult   `mapstructure:",squash"`
 
+	APITimeoutRaw        string `mapstructure:"api_timeout"`
+	CleanupTimeoutRaw    string `mapstructure:"cleanup_timeout"`
+	KeepSourceImage      bool   `mapstructure:"keep_source_image"`
+	KeepImageOnError     bool   `mapstructure:"keep_image_on_error"`
+	SkipExport           bool   `mapstructure:"skip_export"`
+	apiTimeout           time.Duration
+	cleanupTimeout       time.Duration
 	CleanTraffic         bool   `mapstructure:"clean_traffic"`
 	ImageReadyTimeoutRaw string `mapstructure:"image_ready_timeout"`
 	VmRunningTimeoutRaw  string `mapstructure:"vm_running_timeout"`
@@ -66,35 +77,41 @@ func (c *Config) VmRunningTimeout() time.Duration {
 }
 
 type ImageConfig struct {
-	ImageName                string   `mapstructure:"image_name"`
-	ImageDescription         string   `mapstructure:"image_description"`
-	SourceImage              string   `mapstructure:"source_image"`
-	GuestOsType              string   `mapstructure:"guest_os_type"`
-	SourceImageUrl           string   `mapstructure:"source_image_url"`
-	Format                   string   `mapstructure:"format"`
-	BackupStorageUuids       []string `mapstructure:"backup_storage_uuids"`
-	ImageUuid                string   `mapstructure:"image_uuid"`
-	Platform                 string   `mapstructure:"platform"`
-	Architecture             string   `mapstructure:"architecture"`
-	SourceVolumeSnapshotUuid string   `mapstructure:"source_volume_snapshot_uuid"`
+	ImageName                string `mapstructure:"image_name"`
+	ImageDescription         string `mapstructure:"image_description"`
+	SourceImage              string `mapstructure:"source_image"`
+	GuestOsType              string `mapstructure:"guest_os_type"`
+	SourceImageUrl           string `mapstructure:"source_image_url"`
+	Format                   string `mapstructure:"format"`
+	ImageUuid                string `mapstructure:"image_uuid"`
+	Platform                 string `mapstructure:"platform"`
+	Architecture             string `mapstructure:"architecture"`
+	SourceVolumeSnapshotUuid string `mapstructure:"source_volume_snapshot_uuid"`
 }
 
 type NetworkConfig struct {
-	L3NetworkName string `mapstructure:"network_name"`
-	L3NetworkUuid string `mapstructure:"network_uuid"`
+	L3NetworkUuids       []string `mapstructure:"network_uuids"`
+	DefaultL3NetworkUuid string   `mapstructure:"default_network_uuid"`
+	L3NetworkName        string   `mapstructure:"network_name"`
+	L3NetworkUuid        string   `mapstructure:"network_uuid"`
 }
 
 type InstanceConfig struct {
-	InstanceName         string `mapstructure:"instance_name"`
-	InstanceUuid         string `mapstructure:"instance_uuid"`
-	InstanceOfferingName string `mapstructure:"instance_offering_name"`
-	InstanceOfferingUuid string `mapstructure:"instance_offering_uuid"`
-	SshKey               string `mapstructure:"sshkey"`
-	UserData             string `mapstructure:"userdata"`
-	RootVolumeUuid       string `mapstructure:"root_volume_uuid"`
-	IP                   string `mapstructure:"ip"`
-	CPUNum               int64  `mapstructure:"cpu_num"`
-	MemorySize           int64  `mapstructure:"memory_size"`
+	ZoneUuid              string   `mapstructure:"zone_uuid"`
+	ClusterUuid           string   `mapstructure:"cluster_uuid"`
+	HostUuid              string   `mapstructure:"host_uuid"`
+	RootDiskOfferingUuid  string   `mapstructure:"root_disk_offering_uuid"`
+	DataDiskOfferingUuids []string `mapstructure:"data_disk_offering_uuids"`
+	InstanceName          string   `mapstructure:"instance_name"`
+	InstanceUuid          string   `mapstructure:"-" mapstructure-to-hcl2:",skip"`
+	InstanceOfferingName  string   `mapstructure:"instance_offering_name"`
+	InstanceOfferingUuid  string   `mapstructure:"instance_offering_uuid"`
+	SshKey                string   `mapstructure:"sshkey"`
+	UserData              string   `mapstructure:"userdata"`
+	RootVolumeUuid        string   `mapstructure:"-" mapstructure-to-hcl2:",skip"`
+	IP                    string   `mapstructure:"-" mapstructure-to-hcl2:",skip"`
+	CPUNum                int64    `mapstructure:"cpu_num"`
+	MemorySize            int64    `mapstructure:"memory_size"`
 }
 
 type BackupStorageConfig struct {
@@ -103,8 +120,8 @@ type BackupStorageConfig struct {
 }
 
 type ExportImageResult struct {
-	ImageUrl string `mapstructure:"image_url"`
-	Success  bool   `mapstructure:"export_image_result"`
+	ImageUrl string `mapstructure:"-" mapstructure-to-hcl2:",skip"`
+	Success  bool   `mapstructure:"-" mapstructure-to-hcl2:",skip"`
 }
 
 func (c *Config) RedactedSummary() string {
@@ -159,7 +176,7 @@ func (c *Config) Prepare(raws ...any) error {
 	}
 
 	if c.SourceImageUrl != "" {
-		log.Printf("[INFO] Configuring source image from URL: %s", c.SourceImageUrl)
+		log.Print("[INFO] Configuring source image from URL")
 		if c.Format == "" {
 			c.Format = "qcow2"
 			log.Printf("[DEBUG] Default image format set to: %s", c.Format)
@@ -209,6 +226,25 @@ func (c *Config) Prepare(raws ...any) error {
 		}
 	}
 
+	for _, e := range c.validateBuild() {
+		errs = packersdk.MultiErrorAppend(errs, e)
+	}
+	for _, setting := range []struct {
+		name, raw string
+		target    *time.Duration
+	}{
+		{"api_timeout", c.APITimeoutRaw, &c.apiTimeout}, {"cleanup_timeout", c.CleanupTimeoutRaw, &c.cleanupTimeout},
+	} {
+		if setting.raw == "" {
+			continue
+		}
+		d, e := time.ParseDuration(setting.raw)
+		if e != nil || d <= 0 {
+			errs = packersdk.MultiErrorAppend(errs, fmt.Errorf("%s must be a positive duration", setting.name))
+		} else {
+			*setting.target = d
+		}
+	}
 	if errs != nil && len(errs.Errors) > 0 {
 		log.Printf("[ERROR] Configuration validation failed with %d error(s)", len(errs.Errors))
 		return errs
@@ -217,4 +253,76 @@ func (c *Config) Prepare(raws ...any) error {
 	log.Printf("[INFO] Configuration prepared successfully")
 	return nil
 
+}
+
+func (c *Config) APITimeout() time.Duration {
+	if c.apiTimeout > 0 {
+		return c.apiTimeout
+	}
+	return defaultAPITimeout
+}
+func (c *Config) CleanupTimeout() time.Duration {
+	if c.cleanupTimeout > 0 {
+		return c.cleanupTimeout
+	}
+	return defaultCleanupTimeout
+}
+func (c *Config) validateBuild() []error {
+	var errs []error
+	add := func(msg string) { errs = append(errs, errors.New(msg)) }
+	if c.ImageName == "" {
+		add("image_name is required")
+	}
+	if c.SourceVolumeSnapshotUuid != "" {
+		if c.SourceImage != "" || c.SourceImageUrl != "" || c.ImageUuid != "" {
+			add("source_volume_snapshot_uuid cannot be combined with another image source")
+		}
+		if c.Comm.Type != "" && c.Comm.Type != "none" {
+			add("snapshot builds require communicator = none")
+		}
+		return errs
+	}
+	if c.SourceImage == "" && c.ImageUuid == "" {
+		add("source_image or image_uuid is required")
+	}
+	if c.SourceImageUrl != "" && c.ImageUuid != "" {
+		add("source_image_url cannot be combined with image_uuid")
+	}
+	if c.InstanceName == "" {
+		add("instance_name is required")
+	}
+	if c.L3NetworkName == "" && c.L3NetworkUuid == "" && len(c.L3NetworkUuids) == 0 {
+		add("network_name, network_uuid or network_uuids is required")
+	}
+	if len(c.L3NetworkUuids) > 0 && (c.L3NetworkName != "" || c.L3NetworkUuid != "") {
+		add("network_uuids cannot be combined with network_name or network_uuid")
+	}
+	seen := map[string]bool{}
+	for _, id := range c.L3NetworkUuids {
+		if id == "" || seen[id] {
+			add("network_uuids must contain unique non-empty UUIDs")
+		}
+		seen[id] = true
+	}
+	if c.DefaultL3NetworkUuid != "" && !seen[c.DefaultL3NetworkUuid] && c.DefaultL3NetworkUuid != c.L3NetworkUuid {
+		add("default_network_uuid must belong to the configured networks")
+	}
+	if c.CPUNum < 0 || c.CPUNum > 2147483647 {
+		add("cpu_num must be between 1 and 2147483647 when configured")
+	}
+	if c.MemorySize < 0 || c.MemorySize > 8796093022207 {
+		add("memory_size is outside the supported MB range")
+	}
+	if c.InstanceOfferingName == "" && c.InstanceOfferingUuid == "" && (c.CPUNum <= 0 || c.MemorySize <= 0) {
+		add("instance_offering_name/uuid or positive cpu_num and memory_size is required")
+	}
+	if (c.InstanceOfferingName != "" || c.InstanceOfferingUuid != "") && (c.CPUNum != 0 || c.MemorySize != 0) {
+		add("instance offering cannot be combined with cpu_num/memory_size")
+	}
+	for _, id := range c.DataDiskOfferingUuids {
+		if id == "" {
+			add("data_disk_offering_uuids cannot contain empty UUIDs")
+		}
+	}
+	return errs
 }

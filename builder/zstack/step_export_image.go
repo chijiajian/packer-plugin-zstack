@@ -25,12 +25,12 @@ type exportImageResult struct {
 func (s *StepExportImage) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {
 	ui := state.Get("ui").(packersdk.Ui)
 	config := state.Get("config").(*Config)
-	driver := state.Get("driver").(Driver)
+	driver := stepDriver(ctx, state)
 
 	// AC-003-01/03: Skip export when no backup storage configured
-	if config.BackupStorageUuid == "" {
-		log.Printf("[INFO] Skipping image export: no backup storage configured")
-		ui.Say("Skipping image export: no backup storage configured")
+	if config.SkipExport || config.BackupStorageUuid == "" {
+		log.Printf("[INFO] Skipping image export: disabled or no backup storage configured")
+		ui.Say("Skipping image export: disabled or no backup storage configured")
 		return multistep.ActionContinue
 	}
 
@@ -49,22 +49,11 @@ func (s *StepExportImage) Run(ctx context.Context, state multistep.StateBag) mul
 		},
 	}
 
-	resultCh := make(chan exportImageResult, 1)
-	go func() {
-		res, err := driver.ExportImage(config.BackupStorageUuid, exportImageParam)
-		resultCh <- exportImageResult{view: res, err: err}
-	}()
-
-	var res exportImageResult
-	select {
-	case <-ctx.Done():
-		ui.Say("Export cancelled; waiting for in-flight ZStack call to return")
-		log.Printf("[INFO] Context cancelled during image export; waiting for SDK call to finish")
-		res = <-resultCh
-		state.Put("error", ctx.Err())
-		return multistep.ActionHalt
-	case res = <-resultCh:
+	value, err := driver.ExportImage(config.BackupStorageUuid, exportImageParam)
+	if ctx.Err() != nil {
+		return halt(state, ctx.Err())
 	}
+	res := exportImageResult{view: value, err: err}
 
 	if res.err != nil {
 		if isUnsupportedExportError(res.err) {
@@ -78,8 +67,12 @@ func (s *StepExportImage) Run(ctx context.Context, state multistep.StateBag) mul
 		return multistep.ActionHalt
 	}
 
+	if res.view == nil || res.view.ImageUrl == "" {
+		return halt(state, fmt.Errorf("export returned no image URL"))
+	}
 	config.ImageUrl = res.view.ImageUrl
-	ui.Say("Successfully exported image: " + config.ImageUrl)
+	config.Success = true
+	ui.Say("Successfully exported image; URL is available in artifact metadata")
 	return multistep.ActionContinue
 }
 
@@ -90,8 +83,6 @@ func isUnsupportedExportError(err error) bool {
 		return false
 	}
 	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "apiexportimagefrombackupstoragemsg") ||
-		strings.Contains(msg, "no service deals with message") ||
-		strings.Contains(msg, "not support") ||
-		strings.Contains(msg, "unsupported")
+	return strings.Contains(msg, "no service deals with message") && strings.Contains(msg, "apiexportimagefrombackupstoragemsg") ||
+		strings.Contains(msg, "does not support image export") || strings.Contains(msg, "image export is not supported")
 }

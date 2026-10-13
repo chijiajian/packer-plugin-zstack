@@ -19,7 +19,9 @@ type StepAddImage struct {
 func (s *StepAddImage) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {
 	ui := state.Get("ui").(packersdk.Ui)
 	config := state.Get("config").(*Config)
-	driver := state.Get("driver").(Driver)
+	ctx, cancel := context.WithTimeout(ctx, config.ImageReadyTimeout())
+	defer cancel()
+	driver := stepDriver(ctx, state)
 
 	if config.SourceImageUrl == "" || config.SourceImage == "" {
 		err := fmt.Errorf("source image URL or name is empty")
@@ -30,7 +32,7 @@ func (s *StepAddImage) Run(ctx context.Context, state multistep.StateBag) multis
 	}
 
 	ui.Say("Starting image addition process...")
-	log.Printf("[INFO] Adding image '%s' from URL '%s'", config.SourceImage, config.SourceImageUrl)
+	log.Printf("[INFO] Adding source image %q", config.SourceImage)
 
 	description := config.ImageDescription
 	if description == "" {
@@ -40,20 +42,24 @@ func (s *StepAddImage) Run(ctx context.Context, state multistep.StateBag) multis
 	imageParam := param.AddImageParam{
 		BaseParam: param.BaseParam{},
 		Params: param.AddImageParamDetail{
-			Name:        config.SourceImage,
-			Description: &description,
-			Url:         config.SourceImageUrl,
-			MediaType:   strPtr("RootVolumeTemplate"),
-			GuestOsType: strPtr(config.GuestOsType),
-			System:      false,
-			Format:      strPtr(config.Format),
-			Platform:    strPtr(config.Platform),
+			Name:         config.SourceImage,
+			Description:  &description,
+			Url:          config.SourceImageUrl,
+			MediaType:    strPtr("RootVolumeTemplate"),
+			Architecture: optionalString(config.Architecture),
+			GuestOsType:  strPtr(config.GuestOsType),
+			System:       false,
+			Format:       strPtr(config.Format),
+			Platform:     strPtr(config.Platform),
 		},
 	}
 	if config.BackupStorageUuid != "" {
 		imageParam.Params.BackupStorageUuids = []string{config.BackupStorageUuid}
 	}
 
+	r := resources(state)
+	r.ImportedImage = newResource()
+	imageParam.Params.ResourceUuid = &r.ImportedImage.UUID
 	img, err := driver.AddImage(imageParam)
 	if err != nil {
 		err = fmt.Errorf("failed to add image: %v", err)
@@ -63,6 +69,12 @@ func (s *StepAddImage) Run(ctx context.Context, state multistep.StateBag) multis
 		return multistep.ActionHalt
 	}
 
+	if img == nil || img.UUID == "" {
+		return halt(state, fmt.Errorf("image creation returned empty inventory"))
+	}
+	r.ImportedImage.UUID = img.UUID
+	r.ImportedImage.Created = true
+
 	ui.Say(fmt.Sprintf("Successfully added image '%s' (UUID: %s)", config.SourceImage, img.UUID))
 	log.Printf("[INFO] Image added successfully with UUID: %s", img.UUID)
 
@@ -71,4 +83,9 @@ func (s *StepAddImage) Run(ctx context.Context, state multistep.StateBag) multis
 	return multistep.ActionContinue
 }
 
-func (s *StepAddImage) Cleanup(state multistep.StateBag) {}
+func (s *StepAddImage) Cleanup(state multistep.StateBag) {
+	config := state.Get("config").(*Config)
+	if !config.KeepSourceImage {
+		cleanupImage(state, &resources(state).ImportedImage)
+	}
+}

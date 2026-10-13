@@ -18,7 +18,9 @@ type StepWaitForImageReady struct{}
 func (s *StepWaitForImageReady) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {
 	ui := state.Get("ui").(packersdk.Ui)
 	config := state.Get("config").(*Config)
-	driver := state.Get("driver").(Driver)
+	ctx, cancel := context.WithTimeout(ctx, config.ImageReadyTimeout())
+	defer cancel()
+	driver := stepDriver(ctx, state)
 
 	if config.ImageUuid == "" {
 		err := fmt.Errorf("image UUID is empty, cannot wait for ready status")
@@ -50,15 +52,25 @@ func (s *StepWaitForImageReady) Run(ctx context.Context, state multistep.StateBa
 				return multistep.ActionHalt
 			}
 
+			if image == nil {
+				return halt(state, fmt.Errorf("empty image inventory"))
+			}
 			log.Printf("[DEBUG] Image %s status: %s", config.ImageUuid, image.Status)
 
 			if image.Status == "Ready" {
+				if r := resources(state); r.Image.UUID == config.ImageUuid && r.Image.Created {
+					r.ImageReady = true
+				}
 				ui.Say("Image status is now ready!")
 				return multistep.ActionContinue
+			}
+			if image.Status == "Deleted" || image.Status == "Failed" {
+				return halt(state, fmt.Errorf("image entered terminal status %s", image.Status))
 			}
 			ui.Message(fmt.Sprintf("image status is %s, waiting...", image.Status))
 
 		case <-ctx.Done():
+			state.Put("error", ctx.Err())
 			log.Printf("[INFO] Context cancelled while waiting for image %s", config.ImageUuid)
 			return multistep.ActionHalt
 		}

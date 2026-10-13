@@ -4,6 +4,7 @@
 package zstack
 
 import (
+	"context"
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
 	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
 	"github.com/zstackio/zstack-sdk-go-v2/pkg/param"
@@ -11,10 +12,15 @@ import (
 )
 
 type MockDriver struct {
-	GetBackupStorageResult *view.BackupStorageInventoryView
-	GetBackupStorageErr    error
-	GetBackupStorageCalled bool
-	GetBackupStorageUuid   string
+	DeleteExportedImageCalls int
+	DeleteExportedImageErr   error
+	DeleteDataVolumeCalls    []string
+	ExpungeDataVolumeCalls   []string
+	ExpungeDataVolumeErr     error
+	GetBackupStorageResult   *view.BackupStorageInventoryView
+	GetBackupStorageErr      error
+	GetBackupStorageCalled   bool
+	GetBackupStorageUuid     string
 
 	QueryBackStorageResult []view.BackupStorageInventoryView
 	QueryBackStorageErr    error
@@ -290,4 +296,19 @@ func testStateBag(config *Config, driver Driver) multistep.StateBag {
 	state.Put("driver", driver)
 	state.Put("ui", &packersdk.MockUi{})
 	return state
+}
+
+func (m *MockDriver) WithContext(context.Context) Driver { return m }
+func (m *MockDriver) DeleteDataVolume(uuid string) error {
+	m.DeleteDataVolumeCalls = append(m.DeleteDataVolumeCalls, uuid)
+	return nil
+}
+func (m *MockDriver) ExpungeDataVolume(uuid string) error {
+	m.ExpungeDataVolumeCalls = append(m.ExpungeDataVolumeCalls, uuid)
+	return m.ExpungeDataVolumeErr
+}
+
+func (m *MockDriver) DeleteExportedImage(backupStorageUUID, imageUUID string) error {
+	m.DeleteExportedImageCalls++
+	return m.DeleteExportedImageErr
 }

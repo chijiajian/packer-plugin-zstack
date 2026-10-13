@@ -5,6 +5,7 @@ package zstack
 
 import (
 	"context"
+	"crypto/sha512"
 	"fmt"
 	"os"
 	"strconv"
@@ -12,8 +13,6 @@ import (
 
 	"github.com/hashicorp/packer-plugin-sdk/template/config"
 	"github.com/hashicorp/packer-plugin-sdk/template/interpolate"
-	"github.com/zstackio/zstack-sdk-go-v2/pkg/client"
-	"github.com/zstackio/zstack-sdk-go-v2/pkg/param"
 )
 
 const defaultClientLoginTimeout = 30 * time.Second
@@ -31,6 +30,9 @@ type AccessConfig struct {
 }
 
 func getEnvOrDefault(envVar string, defaultValue string) string {
+	if defaultValue != "" {
+		return defaultValue
+	}
 	if v := os.Getenv(envVar); v != "" {
 		return v
 	}
@@ -42,7 +44,7 @@ func (c *AccessConfig) applyEnvDefaults() {
 	// a stale error from a previous invocation with a bad ZSTACK_PORT.
 	c.portEnvErr = nil
 	c.Host = getEnvOrDefault("ZSTACK_HOST", c.Host)
-	if raw := os.Getenv("ZSTACK_PORT"); raw != "" {
+	if raw := os.Getenv("ZSTACK_PORT"); raw != "" && c.Port == 0 {
 		p, err := strconv.Atoi(raw)
 		if err != nil {
 			c.portEnvErr = fmt.Errorf("ZSTACK_PORT is not a valid integer: %q", raw)
@@ -69,6 +71,12 @@ func (c *AccessConfig) validateCredentials() []error {
 		errs = append(errs, fmt.Errorf("either account_name + account_password or access_key_id + access_key_secret is required"))
 	}
 
+	if c.Port < 0 || c.Port > 65535 {
+		errs = append(errs, fmt.Errorf("port must be between 1 and 65535"))
+	}
+	if (c.AccountName != "" || c.AccountPassword != "") && (c.AccessKeyId != "" || c.AccessKeySecret != "") {
+		errs = append(errs, fmt.Errorf("account and access key authentication are mutually exclusive"))
+	}
 	return errs
 }
 
@@ -98,43 +106,46 @@ func (c *AccessConfig) Prepare(raws ...interface{}) []error {
 	return nil
 }
 
-func (c *AccessConfig) CreateClient(debug bool) (*client.ZSClient, error) {
-	var cli *client.ZSClient
-
-	// PKR-001 Bug 1: Only set default port when not specified (was overwriting custom port)
-	if c.Port == 0 {
-		c.Port = 8080
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultClientLoginTimeout)
-	defer cancel()
-
-	if c.AccountName != "" && c.AccountPassword != "" {
-		cli = client.NewZSClient(client.NewZSConfig(c.Host, c.Port, "zstack").LoginAccount(c.AccountName, c.AccountPassword).ReadOnly(false).Debug(debug))
-		_, err := cli.Login(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("unable to create ZStack API client: %s", err)
-		}
-	} else if c.AccessKeyId != "" && c.AccessKeySecret != "" {
-		cli = client.NewZSClient(client.NewZSConfig(c.Host, c.Port, "zstack").AccessKey(c.AccessKeyId, c.AccessKeySecret).ReadOnly(false).Debug(debug))
-		probe := param.NewQueryParam()
-		if _, err := cli.QueryZone(&probe); err != nil {
-			return nil, fmt.Errorf("unable to validate ZStack access key credentials: %s", err)
-		}
-	}
-
-	if cli == nil {
-		return nil, fmt.Errorf("failed to create ZStack client: client is nil")
-	}
-
-	return cli, nil
+func (c *AccessConfig) CreateClient(debug bool) (*apiClient, error) {
+	return c.createClient(context.Background())
 }
-
-func (c *AccessConfig) Driver(debug bool) (*ZStackDriver, error) {
-	cli, err := c.CreateClient(debug)
+func (c *AccessConfig) createClient(parent context.Context) (*apiClient, error) {
+	if errs := c.validateCredentials(); len(errs) > 0 {
+		return nil, errs[0]
+	}
+	cli, err := newAPIClient(c)
 	if err != nil {
 		return nil, err
 	}
+	ctx, cancel := context.WithTimeout(parent, defaultClientLoginTimeout)
+	defer cancel()
+	if c.AccountName != "" && c.AccountPassword != "" {
+		if _, err := cli.Login(ctx); err != nil {
+			return nil, redactError(err, c.secretValues())
+		}
+		return cli, nil
+	}
+	d := &ZStackDriver{client: cli, ctx: ctx, secrets: c.secretValues()}
+	if err := d.ValidateCredentials(); err != nil {
+		return nil, err
+	}
+	return cli, nil
+}
 
-	return &ZStackDriver{client: cli}, nil
+func (c *AccessConfig) secretValues() []string {
+	values := []string{c.AccountPassword, c.AccessKeyId, c.AccessKeySecret}
+	if c.AccountPassword != "" {
+		values = append(values, fmt.Sprintf("%x", sha512.Sum512([]byte(c.AccountPassword))))
+	}
+	return values
+}
+func (c *AccessConfig) Driver(debug bool) (*ZStackDriver, error) {
+	return c.driver(context.Background(), defaultAPITimeout)
+}
+func (c *AccessConfig) driver(ctx context.Context, timeout time.Duration) (*ZStackDriver, error) {
+	cli, err := c.createClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &ZStackDriver{client: cli, ctx: ctx, timeout: timeout, secrets: append(c.secretValues(), cli.session)}, nil
 }
