@@ -11,10 +11,10 @@ settings.local.json
 .claude/settings.local.json
 .sysyhus/**
 .sisyphus/**
-docs/stories/**
-!docs/stories/STORY-PKR-QUALITY-20261013.md
-docs/epic-automation_iac.md
-example/local-dev.pkr.hcl
+# Local task and acceptance records
+docs/stories/
+docs/epic-*.md
+examples/local-dev.pkr.hcl
 
 # locally built plugin binaries (packer init test layout)
 github.com/
