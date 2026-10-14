@@ -90,7 +90,7 @@ v0.0.10 的 `pkg/util/httputils/httputils.go:requestInternal` 使用 `http.NewRe
 
 - 最终库存核查：本次 `packer-quality-*` VM、镜像、快照及对应根盘查询均为 0；取消测试时间之后的新建数据盘查询无残留；原源镜像仍为 Ready。此结论不涵盖上文首轮导出副本的存储文件。
 - 安全核查：`.env` 权限 `0600`，`git check-ignore` 命中，`git ls-files .env` 为空；逐文件比对本次 AK/SK，Git 可见文件匹配数为 0。凭证和验收日志不进入提交；代码通过 PR 提交审核，本次不发布版本。
-- **Q12-A（密码认证通过；密钥路径待合适镜像）**：用户提供的两套镜像已完成非 root/root 密码认证及 SSH provision hook 全流程验收。Ubuntu20.04 镜像已确认禁用 cloud-init，无法用它验证自动密钥注入与清理；需启用且正确配置 cloud-init 的镜像再验该路径。旧源镜像的公钥失败记录作为历史证据保留。
+- **Q12-A（密码及镜像准备通过；密钥受元数据服务阻塞）**：用户提供的两套镜像已完成非 root/root 密码认证及 SSH provision hook 全流程验收。用户提供的 Ubuntu 镜像最初禁用 cloud-init；按追加指示，通过 SSH 安装 Guest Tools 并修正 cloud-init，已制成临时模板并重验；客户机访问元数据端点得到空响应，密钥认证仍未通过，后续见 Q12-D。旧源镜像的公钥失败记录作为历史证据保留。
 - **Q12-B（待环境）**：ARM、Windows/WinRM、bastion、ImageStore、多网卡和放置组合的真实验收。当前覆盖为本地 HCL/参数/生命周期回归，不代表全部部署组合通过。
 - **Q12-C（待存储核查）**：确认首轮已 expunge 镜像 `5389ceda4d92410983de461dbe883ba5` 的导出副本是否残留；管理 API 因 ImageVO 不存在无法删除。后续轮次已验证先删除副本的修复流程。
 
@@ -100,10 +100,35 @@ SSH systemTag 请求格式已与[官方 CreateVmInstance 文档](https://www.zst
 
 验收脚本现在支持 `ZSTACK_ACC_IMAGE_URL` / `ZSTACK_ACC_IMAGE_UUID` 二选一、可选 `ZSTACK_ACC_SSH_PASSWORD`，并断言实际 SSH 用户与配置一致。镜像地址、用户名和密码保存在本机 `.env`，不写入仓库。
 
-- **Ubuntu20.04 非 root 密码认证：通过**。212 秒，覆盖约 4 GB qcow2 的 URL 导入、SSH 登录、`id -un` / `uname -m` / 系统文件检查、停止 VM、制镜像、导出、导出副本删除、VM/源镜像/产物清理。
-- **同一 Ubuntu20.04 镜像的临时密钥认证：镜像前置条件不满足**。通过密码登录本次测试 VM，只读确认 `/etc/cloud/cloud-init.disabled` 存在，`cloud-init status` 为 `disabled`，普通用户与 root 的 authorized_keys 中均无 Packer 临时公钥，实例数据源为 `iid-datasource-none`。因此密码成功不能视为自动密钥注入/清理通过；本次不修改基础镜像的 cloud-init 设置。
+- **Ubuntu（文件名 Ubuntu20.04）非 root 密码认证：通过**。212 秒，覆盖约 4 GB qcow2 的 URL 导入、SSH 登录、`id -un` / `uname -m` / 系统文件检查、停止 VM、制镜像、导出、导出副本删除、VM/源镜像/产物清理。
+- **同一 Ubuntu 镜像的临时密钥认证：镜像前置条件不满足**。通过密码登录本次测试 VM，只读确认 `/etc/cloud/cloud-init.disabled` 存在，`cloud-init status` 为 `disabled`，普通用户与 root 的 authorized_keys 中均无 Packer 临时公钥，实例数据源为 `iid-datasource-none`。因此密码成功不能视为自动密钥注入/清理通过；该轮未修改基础镜像的 cloud-init 设置；后续准备临时副本的验收见下节。
 - **root 密码认证镜像：通过**。503 秒，源文件约 9.5 GB，qcow2 虚拟磁盘 60 GiB；URL 导入、实际 root 身份及远程命令、制镜像、导出、导出副本/VM/源镜像/产物清理全部完成。
 
 自动密钥认证要求客户机能够处理云平台的公钥注入，并配置正确的 SSH 用户；禁用 cloud-init 的镜像可使用已有密码或私钥认证。
 
 补充验收收尾：两轮密码构建通过；密钥场景因已确认的 cloud-init 禁用而超时失败，失败后的 VM 与导入镜像已清理。最终 API 查询本次测试 VM、镜像和根盘均为 0。`go test -race ./...`、`go vet ./...`、`git diff --check` 通过；新提供的具体密码与私有镜像 URL 未出现在 Git 可见文件中，`.env` 保持 0600 且不被跟踪。
+
+
+### Q12-A：SSH 安装 Guest Tools 并准备 cloud-init 镜像（2026-10-13 至 14）
+
+按用户追加要求，参考本机 `qaenv/redis/prepare_vm.sh` 与 `qaenv/logserver/prepare_vm.sh` 中的 cloud-init 和 Guest Tools 安装部分，在本次新建临时 VM 上执行，不运行应用安装、SSH 全局放宽、磁盘填零等无关步骤。
+
+- 实测源镜像文件名虽带 Ubuntu20.04，`/etc/os-release` 为 **Ubuntu 24.04.2 LTS**；已有 cloud-init **24.4**。
+- 阻碍首次启动初始化的配置包括 `/etc/cloud/cloud-init.disabled`，以及 `99-installer.cfg` 中的 `datasource_list: [None]` 和再次生成禁用标记的安装器 userdata。
+- 挂载 Guest Tools ISO 后执行 `bash ./zs-tools-install.sh --all-accept`；Guest Tools **5.5.38** 已安装，`qemu-guest-agent` 与 `zwatch-vm-agent` 均为 active。该安装脚本本身不安装或启用 cloud-init。
+- 临时副本移走 `99-installer.cfg`、移除禁用标记；cloud-init 当前版本由 `DataSourceEc2` 识别 ZStack（实际 platform 为 `zstack`），故使用 `datasource_list: [ Ec2, None ]`。默认用户与测试 SSH 用户一致，并具备测试所需免密 sudo。
+- 启用 cloud-init 四个 systemd 服务，执行 `cloud-init clean --logs --machine-id`，卸载光盘、关机，再制成临时 Ready 模板。原始镜像未修改。
+- 新增 `ZSTACK_ACC_SCENARIO=key-cleanup`：无 SSH 密码，真实生成/注入密钥，等待 cloud-init 完成，先验证用户 authorized_keys 有本次密钥，再于清理后、制镜像前检查用户/root 两处均无该密钥。该用例本轮未到达公钥清理断言：SSH 密钥登录超时，自动清理测试 VM，未生成产物。
+
+依据：[cloud-init EC2/ZStack 实现](https://github.com/canonical/cloud-init/blob/24.4/cloudinit/sources/DataSourceEc2.py)、[cloud-init clean](https://docs.cloud-init.io/en/latest/reference/cli.html#clean)。
+
+
+#### 本轮结果与新增 Q12-D
+
+- **安装/启用已验证，自动密钥验收未通过**：Prepared 模板为 Ready；从它启动的 Packer VM 在 323 秒后因 SSH 公钥认证超时失败，无产物，测试 VM 已自动清理。不能将 Guest Tools 安装成功或 cloud-init 启用视为密钥注入成功。
+- 启用后的 cloud-init 状态为 `enabled-by-generator`、`degraded done`，元数据重试失败后回退至 `DataSourceNone`。客户机使用 `curl --noproxy '*'` 直连 `http://169.254.169.254/2009-04-04/meta-data/instance-id`，TCP 连接成功但返回 `Empty reply from server`；因此不是仅由客户端代理配置造成。
+- 在准备 VM 上独立调用官方 `SetVmSshKey`，清理 cloud-init 缓存并停止/启动后复现相同空响应；本次复核不依赖 Packer 的创建流程。诊断时将该临时 VM 的 Ec2 元数据等待缩短至 30 秒、单次请求 5 秒，只访问 IPv4 端点；这不构成对服务端问题的修复。
+- **Q12-D（待云端排查，P2）**：排查当前测试 L3 网络的 Userdata 服务及对应元数据代理/后端，确认为何元数据 HTTP 请求被直接关闭。网络 inventory 已声明启用 Userdata；服务故障的具体根因尚未确认。验收条件：新 VM 首次启动能读取其 instance-id，cloud-init 正常完成，然后 `key-cleanup` 场景通过。需进一步查看承载该服务的主机日志，不能通过扩大 Packer SSH 超时或手工写入公钥来替代验收。
+- 本地 `go test -race ./...` 与 `go vet ./...` 通过；云端密钥用例仍为未通过。凭证、远程脚本输出与临时私钥继续只留在 Git 忽略的本机文件中。
+
+本轮收尾（2026-10-14）：准备 VM、导入源镜像、Prepared 模板均已删除并 expunge；`packer-quality-*` VM/镜像库存为 0，关联准备根盘及测试命名卷库存为 0，原有源镜像仍 Ready。`.env` 保持 0600，AK/SK、独有 SSH 密码和私有镜像 URL 在 Git 可见文件中的匹配数为 0。Q12-D 与先前 Q12-B/C 仍未完成。

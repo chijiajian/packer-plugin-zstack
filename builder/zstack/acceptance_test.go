@@ -2,6 +2,7 @@ package zstack
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"os"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
 	"github.com/stretchr/testify/require"
 	"github.com/zstackio/zstack-sdk-go-v2/pkg/param"
+	"github.com/zstackio/zstack-sdk-go-v2/pkg/view"
 )
 
 // Opt in explicitly; this test creates and deletes resources in the configured cloud.
@@ -95,7 +97,27 @@ func TestAcceptanceCloud(t *testing.T) {
 			return e
 		}
 	}
-	artifact, err := b.Run(ctx, ui, hook)
+	var artifact packersdk.Artifact
+	if scenario == "key-cleanup" {
+		require.Equal(t, "ssh", comm)
+		require.Empty(t, os.Getenv("ZSTACK_ACC_SSH_PASSWORD"), "this scenario must authenticate with the generated key")
+		d, e := b.config.AccessConfig.driver(ctx, b.config.APITimeout())
+		require.NoError(t, e)
+		d.secrets = append(d.secrets, b.config.SourceImageUrl)
+		hook.after = func(ctx context.Context) error {
+			return hook.checkTemporaryKey(ctx, ui, string(b.config.Comm.SSHPublicKey), true)
+		}
+		observer := &acceptanceStopObserver{Driver: d, beforeStop: func(ctx context.Context) error {
+			if e := hook.checkTemporaryKey(ctx, ui, string(b.config.Comm.SSHPublicKey), false); e != nil {
+				return e
+			}
+			t.Log("temporary key absent from user and root authorized_keys before image creation")
+			return nil
+		}}
+		artifact, err = b.runWithDriver(ctx, ui, hook, observer)
+	} else {
+		artifact, err = b.Run(ctx, ui, hook)
+	}
 	if scenario == "cancel" {
 		require.ErrorIs(t, err, context.Canceled)
 		require.Nil(t, artifact)
@@ -134,6 +156,7 @@ type acceptanceHook struct {
 	ssh          bool
 	expectedUser string
 	after        func(context.Context) error
+	comm         packersdk.Communicator
 }
 
 func (h *acceptanceHook) Run(ctx context.Context, name string, ui packersdk.Ui, comm packersdk.Communicator, data interface{}) error {
@@ -141,6 +164,7 @@ func (h *acceptanceHook) Run(ctx context.Context, name string, ui packersdk.Ui, 
 		return nil
 	}
 	if h.ssh {
+		h.comm = comm
 		var output strings.Builder
 		cmd := &packersdk.RemoteCmd{Command: "id -un && uname -m && test -r /etc/os-release", Stdout: &output}
 		if err := cmd.RunWithUi(ctx, comm, ui); err != nil {
@@ -157,4 +181,53 @@ func (h *acceptanceHook) Run(ctx context.Context, name string, ui packersdk.Ui, 
 		return h.after(ctx)
 	}
 	return nil
+}
+
+// Inspect the guest after the real cleanup step, before shutdown seals its disk.
+// This scenario requires Python 3 and passwordless sudo in the test image.
+func (h *acceptanceHook) checkTemporaryKey(ctx context.Context, ui packersdk.Ui, key string, present bool) error {
+	fields := strings.Fields(key)
+	if len(fields) < 2 || h.comm == nil {
+		return fmt.Errorf("generated key and SSH communicator are required")
+	}
+	// Match key material, including copies whose comments were changed by the guest.
+	key = fields[1]
+	script := fmt.Sprintf(`import pathlib, pwd
+key = %q
+home = pathlib.Path(pwd.getpwnam(%q).pw_dir)
+def contains(path):
+    return path.exists() and key in path.read_text()
+user_key = contains(home / '.ssh/authorized_keys')
+root_key = contains(pathlib.Path('/root/.ssh/authorized_keys'))
+assert user_key if %s else not (user_key or root_key), 'unexpected temporary key state'
+`, key, h.expectedUser, map[bool]string{true: "True", false: "False"}[present])
+	encoded := base64.StdEncoding.EncodeToString([]byte(script))
+	cmd := &packersdk.RemoteCmd{Command: "sudo -n python3 -c \"import base64; exec(base64.b64decode('" + encoded + "'))\""}
+	if present {
+		cmd.Command = "sudo -n timeout 180 cloud-init status --wait && " + cmd.Command
+	}
+	if err := cmd.RunWithUi(ctx, h.comm, ui); err != nil {
+		return err
+	}
+	if cmd.ExitStatus() != 0 {
+		return fmt.Errorf("temporary key check (present=%t) exited %d", present, cmd.ExitStatus())
+	}
+	return nil
+}
+
+type acceptanceStopObserver struct {
+	Driver
+	ctx        context.Context
+	beforeStop func(context.Context) error
+}
+
+func (d *acceptanceStopObserver) WithContext(ctx context.Context) Driver {
+	return &acceptanceStopObserver{Driver: d.Driver.WithContext(ctx), ctx: ctx, beforeStop: d.beforeStop}
+}
+
+func (d *acceptanceStopObserver) StopVminstance(id string) (*view.VmInstanceInventoryView, error) {
+	if err := d.beforeStop(d.ctx); err != nil {
+		return nil, err
+	}
+	return d.Driver.StopVminstance(id)
 }
