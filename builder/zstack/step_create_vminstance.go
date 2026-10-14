@@ -32,11 +32,19 @@ func (s *StepCreateVMInstance) Run(ctx context.Context, state multistep.StateBag
 	ui.Say(fmt.Sprintf("Creating VM instance '%s'...", config.InstanceName))
 
 	var systemtags []string
-	systemtags = append(systemtags, "cdroms::Empty::None::None", fmt.Sprintf("cleanTraffic::%t", config.CleanTraffic))
-	if config.SshKey != "" {
+	cdroms := "cdroms::Empty::None::None"
+	if config.ISOInstall {
+		aux := "Empty"
+		if id, ok := state.Get("answer_iso_uuid").(string); ok && id != "" {
+			aux = id
+		}
+		cdroms = fmt.Sprintf("cdroms::%s::%s::None", config.ImageUuid, aux)
+	}
+	systemtags = append(systemtags, cdroms, fmt.Sprintf("cleanTraffic::%t", config.CleanTraffic))
+	if config.SshKey != "" && !config.ISOInstall {
 		systemtags = append(systemtags, fmt.Sprintf("sshkey::%s", config.SshKey))
 	}
-	if config.UserData != "" {
+	if config.UserData != "" && !config.ISOInstall {
 		systemtags = append(systemtags, fmt.Sprintf("userdata::%s", encodeUserData(config.UserData)))
 	}
 
@@ -65,6 +73,9 @@ func (s *StepCreateVMInstance) Run(ctx context.Context, state multistep.StateBag
 		}
 	}
 
+	if config.ISOInstall {
+		createVmInstanceParam.Params.Strategy = strPtr("CreateStopped")
+	}
 	r := resources(state)
 	r.VM = newResource()
 	createVmInstanceParam.Params.ResourceUuid = &r.VM.UUID

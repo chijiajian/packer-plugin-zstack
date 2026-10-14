@@ -5,6 +5,7 @@ go 1.26.9
 require (
 	github.com/hashicorp/hcl/v2 v2.25.0
 	github.com/hashicorp/packer-plugin-sdk v0.6.12
+	github.com/mitchellh/go-vnc v0.0.0-20150629162542-723ed9867aed
 	github.com/stretchr/testify v1.11.1
 	github.com/zclconf/go-cty v1.19.0
 	github.com/zstackio/zstack-sdk-go-v2 v0.0.10
@@ -87,6 +88,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.45.0 // indirect
 	go.opentelemetry.io/otel/sdk/metric v1.45.0 // indirect
 	go.opentelemetry.io/otel/trace v1.45.0 // indirect
+	golang.org/x/mobile v0.0.0-20210901025245-1fde1d6c3ca1 // indirect
 	golang.org/x/mod v0.40.0 // indirect
 	golang.org/x/net v0.58.0 // indirect
 	golang.org/x/tools v0.49.0 // indirect

@@ -1,0 +1,9 @@
+This example requires a build containing `zstack-iso`; install the development plugin locally before running it. Supply variables through a local ignored `.pkrvars.hcl` file or `PKR_VAR_*` environment variables, and use the normal `ZSTACK_*` credentials.
+
+The Debian BIOS boot command loads Preseed from Packer's HTTP server. The auxiliary CD contains `post-install.sh`; Preseed mounts `/dev/sr1` and runs that script in the installer to configure target SSH and completion markers. Change disk/CD device names for your VM hardware. This is an installer script, not a ZStack userdata payload.
+
+Debian 13's `apt-cdrom` automatically scans all optical drives. The Preseed early command installs an APT generator that temporarily sets `Acquire::cdrom::AutoDetect "false"`, so the answer CD is not mistaken for a package repository. The late script removes that temporary APT configuration. Without this, the installer can stop at an interactive APT media error even though the answer file was read correctly.
+
+Verify the installation ISO against the Debian publisher's checksum before serving its URL. Set `http_ip` to an address reachable from both the VM and backup storage. Generated CDs must be downloadable from the runner's temporary publisher port, and the runner must reach the host's TCP VNC console. BIOS/UEFI installers have different boot menus; this example's boot command targets BIOS.
+
+`installation_check_command` verifies the late script's markers and an ext4 root filesystem before and after the builder detaches both ISOs and restarts from hard disk. The example keeps the installation root credential for provisioning; apply your credential removal/rotation and image generalization policy in final provisioners.
