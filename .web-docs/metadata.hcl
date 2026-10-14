@@ -21,7 +21,7 @@ integration {
   }
   license {
     type = "MPL-2.0"
-    url = "https://github.com/hashicorp/integration-template/blob/main/LICENSE.md"
+    url = "https://github.com/chijiajian/packer-plugin-zstack/blob/main/LICENSE"
   }
   component {
     type = "builder"

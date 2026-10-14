@@ -1,4 +1,9 @@
 
+Type: `zstack`
+
+Creates a root-volume template from a provisioned VM or an existing volume snapshot. For unattended operating-system installation from ISO, use the [ZStack ISO builder](/packer/integrations/chijiajian/zstack/latest/components/builder/iso).
+
+
 <!-- Builder Configuration Fields -->
 
 **Required**
@@ -18,7 +23,7 @@
 
 - `access_key_id` (String) AccessKey ID for ZStack API. Create AccessKey ID from MN,  Operational Management->Access Control->AccessKey Management. May also be provided via ZSTACK_ACCESS_KEY_ID environment variable. Required if using AccessKey authentication. Mutually exclusive with `account_name` and `account_password`.
 - `access_key_secret` (String, Sensitive) AccessKey Secret for ZStack API. May also be provided via ZSTACK_ACCESS_KEY_SECRET environment variable. Required if using AccessKey authentication. Mutually exclusive with `account_name` and `account_password`.
-- `account_name` (String) Username for ZStack API. May also be provided via ZSTACK_ACCOUN_TNAME environment variable. Required if using Account authentication.  Only supports the platform administrator account (`admin`). Mutually exclusive with `access_key_id` and `access_key_secret`. Using `access_key_id` and `access_key_secret` is the recommended approach for authentication, as it provides more flexibility and security.
+- `account_name` (String) Username for ZStack API. May also be provided via ZSTACK_ACCOUNT_NAME environment variable. Required if using Account authentication.  Only supports the platform administrator account (`admin`). Mutually exclusive with `access_key_id` and `access_key_secret`. Using `access_key_id` and `access_key_secret` is the recommended approach for authentication, as it provides more flexibility and security.
 - `account_password` (String, Sensitive) Password for ZStack API. May also be provided via ZSTACK_ACCOUNT_PASSWORD environment variable.Required if using Account authentication.  Only supports the platform administrator account (`admin`). Mutually exclusive with `access_key_id` and `access_key_secret`. Using `access_key_id` and `access_key_secret` is the recommended approach for authentication, as it provides more flexibility and security.
 - `port` (Number) ZStack Cloud MN API port. May also be provided via ZSTACK_PORT environment variable.
 
@@ -27,26 +32,46 @@
 
 - `source_image` (String) - Name of the source image used to create VM instance.
 
+- `image_uuid` (String) - UUID of the source image. When provided, skips name-based image lookup.
+
 - `source_image_url` (String) - URL of the source image, supports HTTP/HTTPS protocols.
 
 - `format` (String) - Image format, supports formats like "qcow2", "raw", etc.
 
 - `platform` (String) - Operating system platform type, such as "Linux", "Windows", etc.
 
+- `guest_os_type` (String) - Guest OS type, such as "Ubuntu", "CentOS", etc.
+
+- `architecture` (String) - CPU architecture of the image, such as "x86_64", "aarch64".
+
 - `image_name` (String) - Name of the target image to be created.
+
+- `image_description` (String) - Description for the created image. Defaults to the image name if not set.
+
+- `source_volume_snapshot_uuid` (String) - UUID of an existing ZStack volume snapshot. When set, the builder creates a root volume template from that existing snapshot and skips VM creation, SSH connection, and provisioners. Requires `image_name` and one of `backup_storage_name` / `backup_storage_uuid`.
 
 **Network Parameters**
 
 - `network_name` (String) - L3 network name for VM network configuration.
 
+- `network_uuid` (String) - UUID of the L3 network. When provided, skips name-based network lookup.
+
 **Instance Parameters**
 
 - `instance_offering_name` (String) - Computing specification name that defines VM resources like CPU and memory.
+
+- `instance_offering_uuid` (String) - UUID of the instance offering. When provided, skips name-based lookup.
+
+- `cpu_num` (Number) - Number of CPU cores for the VM instance. Use instead of instance_offering_name for custom sizing.
+
+- `memory_size` (Number) - Memory size in MB for the VM instance. Use instead of instance_offering_name for custom sizing.
 
 - `instance_name` (String) - Name of the VM instance to be created.
 
 **Storage Parameters**
 - `backup_storage_name` (String) - Name of the backup storage for storing created images.
+
+- `backup_storage_uuid` (String) - UUID of the backup storage. Required for storing and exporting the created image.
 
 **SSH Parameters**
 - `ssh_username` (String) - SSH username for connecting to the created VM instance.
@@ -60,27 +85,79 @@
 -->
 ### Example Usage
 
+In the normal VM build path, the builder provisions the VM, stops it, and creates the final image directly from the stopped root volume.
 
 ```hcl
-source "zstack" "test" {
+source "zstack" "example" {
   zstack_host       = "zstack.example.com"
-  port             = 8080
-  access_key_id     = "your-access-key-id"
-  access_key_secret = "your-access-key-secret"
-  
-  source_image      = "Centos8"
-  source_image_url  = "http://example.com/image.qcow2"
+  access_key_id     = env("ZSTACK_ACCESS_KEY_ID")
+  access_key_secret = env("ZSTACK_ACCESS_KEY_SECRET")
+
+  source_image     = "ubuntu-22.04-from-url"
+  source_image_url = "http://mirrors.example.com/images/ubuntu-22.04-server.qcow2"
   format           = "qcow2"
   platform         = "Linux"
-  
-  network_name     = "public-net"
-  instance_offering_name = "min"
-  backup_storage_name = "bs"
-  instance_name    = "packer-test"
-  image_name       = "image-by-packer"
-  
-  ssh_username     = "root"
-  ssh_password     = "your-ssh-password"
+  guest_os_type    = "Ubuntu"
+
+  network_name        = "default-network"
+  cpu_num             = 2
+  memory_size         = 4096
+  backup_storage_name = "local-backup"
+
+  instance_name     = "packer-example"
+  image_name        = "packer-example-image"
+  image_description = "Built with Packer using AK/SK authentication"
+
+  ssh_username = "root"
+  ssh_password = "your-ssh-password"
 }
 
 ```
+
+### Example: Build From Volume Snapshot
+
+Skip VM creation entirely and build an image from an existing volume snapshot. No SSH connection or provisioners are required:
+
+```hcl
+source "zstack" "from_snapshot" {
+  zstack_host      = "zstack.example.com"
+  account_name     = env("ZSTACK_ACCOUNT_NAME")
+  account_password = env("ZSTACK_ACCOUNT_PASSWORD")
+
+  source_volume_snapshot_uuid = "snapshot-uuid-here"
+
+  image_name          = "packer-from-snapshot-image"
+  image_description   = "Built from ZStack volume snapshot"
+  platform            = "Linux"
+  architecture        = "x86_64"
+  backup_storage_name = "local-backup"
+}
+
+build {
+  sources = ["source.zstack.from_snapshot"]
+}
+```
+
+## Lifecycle, timeouts and optional placement
+
+See the [configuration guide](https://github.com/chijiajian/packer-plugin-zstack#quality-fixes-and-upgrade-2026-10) and [examples](https://github.com/chijiajian/packer-plugin-zstack/tree/main/examples) for setup and usage.
+
+| Setting | Default | Behavior |
+| --- | --- | --- |
+| `api_timeout` | `30m` | Deadline per API operation, including job polling |
+| `cleanup_timeout` | `5m` | Independent deadline for cleanup after success, failure or cancellation |
+| `image_ready_timeout` | `5m` | Image creation/import and readiness wait deadlines |
+| `vm_running_timeout` | `5m` | VM creation and running wait deadlines |
+| `keep_source_image` | `false` | Retain a source image imported by this build |
+| `keep_image_on_error` | `false` | Retain an output image on build failure |
+| `skip_export` | `false` | Keep the cloud image without requesting an export URL |
+| `network_uuids` | unset | Multiple L3 network UUIDs; exclusive with singular network selectors |
+| `default_network_uuid` | unset | Default NIC; must belong to the selected networks |
+| `zone_uuid`, `cluster_uuid`, `host_uuid` | unset | Optional VM placement constraints |
+| `root_disk_offering_uuid` | unset | Optional root disk offering |
+| `boot_mode` | unset | `Legacy` or `UEFI`; when unset, use the image/cloud default |
+| `data_disk_offering_uuids` | unset | Data disks created with the VM, cleaned after the build |
+
+Set `communicator = "ssh"` or `"winrm"` and supply credentials for the source image. If using automatic SSH key injection, the source image must support the required cloud-init metadata and key cleanup. ISO installation configures credentials through the installer answer file instead.
+
+Only the root volume is included in the output template. Existing source resources are never cleaned. A failed or cancelled build returns no artifact. Artifact `Files()` is empty; use `Id()` / `State("image_uuid")`, `State("image_url")`, `State("backup_storage_uuid")`, and `State("cleanup_warnings")` for metadata. Inspect UUIDs in cleanup warnings because server-side creation may complete after local cancellation.

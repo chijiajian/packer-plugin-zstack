@@ -1,4 +1,11 @@
 
+# ZStack Builder
+
+Type: `zstack`
+
+Creates a root-volume template from a provisioned VM or an existing volume snapshot. For unattended operating-system installation from ISO, use the [ZStack ISO builder](/packer/plugins/builders/zstack/iso).
+
+
 <!-- Builder Configuration Fields -->
 
 **Required**
@@ -132,3 +139,27 @@ build {
   sources = ["source.zstack.from_snapshot"]
 }
 ```
+
+## Lifecycle, timeouts and optional placement
+
+See the [configuration guide](https://github.com/chijiajian/packer-plugin-zstack#quality-fixes-and-upgrade-2026-10) and [examples](https://github.com/chijiajian/packer-plugin-zstack/tree/main/examples) for setup and usage.
+
+| Setting | Default | Behavior |
+| --- | --- | --- |
+| `api_timeout` | `30m` | Deadline per API operation, including job polling |
+| `cleanup_timeout` | `5m` | Independent deadline for cleanup after success, failure or cancellation |
+| `image_ready_timeout` | `5m` | Image creation/import and readiness wait deadlines |
+| `vm_running_timeout` | `5m` | VM creation and running wait deadlines |
+| `keep_source_image` | `false` | Retain a source image imported by this build |
+| `keep_image_on_error` | `false` | Retain an output image on build failure |
+| `skip_export` | `false` | Keep the cloud image without requesting an export URL |
+| `network_uuids` | unset | Multiple L3 network UUIDs; exclusive with singular network selectors |
+| `default_network_uuid` | unset | Default NIC; must belong to the selected networks |
+| `zone_uuid`, `cluster_uuid`, `host_uuid` | unset | Optional VM placement constraints |
+| `root_disk_offering_uuid` | unset | Optional root disk offering |
+| `boot_mode` | unset | `Legacy` or `UEFI`; when unset, use the image/cloud default |
+| `data_disk_offering_uuids` | unset | Data disks created with the VM, cleaned after the build |
+
+Set `communicator = "ssh"` or `"winrm"` and supply credentials for the source image. If using automatic SSH key injection, the source image must support the required cloud-init metadata and key cleanup. ISO installation configures credentials through the installer answer file instead.
+
+Only the root volume is included in the output template. Existing source resources are never cleaned. A failed or cancelled build returns no artifact. Artifact `Files()` is empty; use `Id()` / `State("image_uuid")`, `State("image_url")`, `State("backup_storage_uuid")`, and `State("cleanup_warnings")` for metadata. Inspect UUIDs in cleanup warnings because server-side creation may complete after local cancellation.

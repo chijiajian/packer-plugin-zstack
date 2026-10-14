@@ -1,15 +1,15 @@
+# ZStack Packer Plugin
 
-The zstack builder is used to create ZStack Image by VM Instance
+Build custom ZStack images from an existing VM image, a volume snapshot, or an unattended operating-system installation from ISO. The output is a root-volume template stored in ZStack; supported backup storage can also provide an export URL.
 
-### Installation
+## Installation
 
-To install this plugin, copy and paste this code into your Packer configuration, then run [`packer init`](https://www.packer.io/docs/commands/init).
+Declare `github.com/chijiajian/zstack` in Packer's `required_plugins` block, select a plugin version containing the features you need, and run `packer init`. The ISO builder and newer placement/lifecycle fields require a compatible release or a local build from current source.
 
 ```hcl
 packer {
   required_plugins {
     zstack = {
-      # source represents the GitHub URI to the plugin repository without the `packer-plugin-` prefix.
       source  = "github.com/chijiajian/zstack"
       version = ">= 1.1.0"
     }
@@ -17,16 +17,17 @@ packer {
 }
 ```
 
-Alternatively, you can use `packer plugins install` to manage installation of this plugin.
+Authenticate with either `ZSTACK_ACCESS_KEY_ID`/`ZSTACK_ACCESS_KEY_SECRET` or `ZSTACK_ACCOUNT_NAME`/`ZSTACK_ACCOUNT_PASSWORD`, together with `ZSTACK_HOST`. Explicit HCL values override environment defaults. Load local `.env` files yourself; Packer does not load them automatically.
 
-```sh
-$ packer plugins install github.com/chijiajian/zstack
-```
+## Builders
 
-### Components
+- [ZStack](/packer/integrations/chijiajian/zstack/latest/components/builder/zstack) (`zstack`): provision a VM from an existing image and create a template from its root disk, or build directly from an existing volume snapshot.
+- [ZStack ISO](/packer/integrations/chijiajian/zstack/latest/components/builder/iso) (`zstack-iso`): install an OS onto a blank root disk using HTTP/CD answer files, verify hard-disk boot, then provision and create a template. ZStack userdata is not used for installation.
 
+## Examples and requirements
 
-#### Builders
+The [examples directory](https://github.com/chijiajian/packer-plugin-zstack/tree/main/examples) includes authentication, resource UUIDs, snapshot builds, placement and unattended ISO installation. Choose one template rather than loading all top-level examples together.
 
-- [builder](/packer/integrations/hashicorp/zstack/latest/components/builder/zstack) - Provides the capability to build customized images based on an existing ZStack VM instance.
+ISO examples cover Debian, Ubuntu Server, Rocky ARM and Windows Server. Configure the installer credentials, firmware, root-disk offering and an installation check for your OS. The runner must reach SSH/WinRM and, for boot commands, the host's VNC console; HTTP/CD delivery must be reachable from the guest and backup storage.
 
+Only the root disk is included in the resulting image. Build-owned temporary VMs, data disks and imported media are cleaned by default; existing source resources are retained. See each builder's configuration for retention settings, timeouts and export behavior. Keep credentials and rendered answer files in ignored local files.
