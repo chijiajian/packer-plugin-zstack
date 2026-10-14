@@ -5,7 +5,7 @@ packer {
   required_plugins {
     zstack = {
       source  = "github.com/chijiajian/zstack"
-      version = ">= 0.0.1"
+      version = "= 1.0.1-dev"
     }
   }
 }
@@ -42,7 +42,7 @@ source "zstack-iso" "debian" {
   # The guest must reach this address; backup storage also needs it for cd_content.
   http_ip = var.http_ip
   http_content = {
-    "/preseed.cfg" = templatefile("${path.root}/preseed.cfg.pkrtpl", {
+    "/preseed.cfg" = templatefile("preseed.cfg.pkrtpl", {
       root_password_hash = var.root_password_hash
     })
   }

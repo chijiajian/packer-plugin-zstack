@@ -282,3 +282,5 @@ Q14 实施进展：新增 `zstack-iso` builder（默认 builder 也可显式 `is
 本地 `make test plugin-check`、race/vet、生成 schema、格式和模块图检查通过；插件 describe 包含默认 builder 和 iso。配置/已有 ISO/架构校验、CD 最小尺寸与仅暴露单文件、硬盘启动前卸载顺序、错误短路与取消测试通过。凭证与安装密码 hash 扫描无匹配；私有配置/日志继续忽略。
 
 认证范围为 x86_64、BIOS、Debian 13.7、SSH、Ceph 这一组合。Windows ISO/Autounattend/WinRM、ARM ISO、UEFI、其他安装器及存储组合未做本轮真实认证；已有 Windows qcow2/ARM 基础验收不替代 ISO 安装验收。应答文件由用户维护，插件不解析操作系统专用语义。
+
+示例补充验证：本机 Packer 1.9.4 使用隔离的开发插件目录执行 `packer validate -var-file=<本机私有变量文件> examples/iso` 通过。示例固定 `1.0.1-dev`，避免已有较高版本旧插件遮蔽 ISO builder；`templatefile` 使用相对模板目录的文件名，修复旧版 Packer 重复拼接 `path.root` 的问题。
