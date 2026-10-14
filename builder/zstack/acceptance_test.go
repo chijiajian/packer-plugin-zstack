@@ -29,6 +29,7 @@ func TestAcceptanceCloud(t *testing.T) {
 	imageUUID, imageURL := os.Getenv("ZSTACK_ACC_IMAGE_UUID"), os.Getenv("ZSTACK_ACC_IMAGE_URL")
 	require.True(t, (imageUUID != "") != (imageURL != ""), "set exactly one of ZSTACK_ACC_IMAGE_UUID and ZSTACK_ACC_IMAGE_URL")
 	name := fmt.Sprintf("packer-quality-%d", time.Now().UnixNano())
+	arch := os.Getenv("ZSTACK_ACC_ARCHITECTURE")
 	comm := os.Getenv("ZSTACK_ACC_COMMUNICATOR")
 	if comm == "" {
 		comm = "none"
@@ -47,6 +48,7 @@ func TestAcceptanceCloud(t *testing.T) {
 		raw["network_uuids"] = networks
 	}
 	for env, field := range map[string]string{
+		"ZSTACK_ACC_ARCHITECTURE":         "architecture",
 		"ZSTACK_ACC_DEFAULT_NETWORK_UUID": "default_network_uuid",
 		"ZSTACK_ACC_ZONE_UUID":            "zone_uuid", "ZSTACK_ACC_CLUSTER_UUID": "cluster_uuid", "ZSTACK_ACC_HOST_UUID": "host_uuid",
 	} {
@@ -57,7 +59,9 @@ func TestAcceptanceCloud(t *testing.T) {
 	if imageURL != "" {
 		raw["source_image_url"] = imageURL
 		raw["source_image"] = name + "-source"
-		raw["architecture"] = "x86_64"
+		if arch == "" {
+			raw["architecture"] = "x86_64"
+		}
 	} else {
 		raw["image_uuid"] = imageUUID
 	}
@@ -76,7 +80,7 @@ func TestAcceptanceCloud(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 	ui := &packersdk.BasicUi{Reader: os.Stdin, Writer: os.Stdout, ErrorWriter: os.Stderr}
-	hook := &acceptanceHook{ssh: comm == "ssh", expectedUser: os.Getenv("ZSTACK_ACC_SSH_USERNAME")}
+	hook := &acceptanceHook{ssh: comm == "ssh", expectedUser: os.Getenv("ZSTACK_ACC_SSH_USERNAME"), expectedArch: arch}
 	if len(networks) > 0 || os.Getenv("ZSTACK_ACC_ZONE_UUID") != "" || os.Getenv("ZSTACK_ACC_CLUSTER_UUID") != "" || os.Getenv("ZSTACK_ACC_HOST_UUID") != "" {
 		hook.verify = func(ctx context.Context) error {
 			d, e := b.config.AccessConfig.driver(ctx, time.Minute)
@@ -193,6 +197,11 @@ func TestAcceptanceCloud(t *testing.T) {
 	// Existing input is preserved; an image imported by this build is removed.
 	d, err := b.config.AccessConfig.driver(ctx, time.Minute)
 	require.NoError(t, err)
+	if arch != "" {
+		output, err := d.GetImage(artifact.Id())
+		require.NoError(t, err)
+		require.Equal(t, arch, output.Architecture, "output image architecture")
+	}
 	if imageUUID != "" {
 		source, err := d.GetImage(imageUUID)
 		require.NoError(t, err)
@@ -245,6 +254,7 @@ func acceptanceExportProbe(ctx context.Context, url string, exists bool) error {
 type acceptanceHook struct {
 	ssh          bool
 	expectedUser string
+	expectedArch string
 	after        func(context.Context) error
 	verify       func(context.Context) error
 	comm         packersdk.Communicator
@@ -268,6 +278,12 @@ func (h *acceptanceHook) Run(ctx context.Context, name string, ui packersdk.Ui, 
 		}
 		if cmd.ExitStatus() != 0 {
 			return fmt.Errorf("acceptance command exited %d", cmd.ExitStatus())
+		}
+		if h.expectedArch != "" {
+			lines := strings.Split(strings.TrimSpace(output.String()), "\n")
+			if len(lines) < 2 || lines[1] != h.expectedArch {
+				return fmt.Errorf("SSH guest architecture does not match %s", h.expectedArch)
+			}
 		}
 		if !strings.HasPrefix(output.String(), h.expectedUser+"\n") {
 			return fmt.Errorf("SSH connected as an unexpected user")

@@ -164,7 +164,7 @@ SSH systemTag 请求格式已与[官方 CreateVmInstance 文档](https://www.zst
 双网卡 SSH 场景验证管理网的真实连通性；communicator=none 场景验证云端分配与插件 IP 选择。尚未把每张客户机网卡的 DHCP、路由或跨网互通都列为通过。选用已接入同一集群的既有网络，未修改共享网络和路由器。
 
 
-#### Q12-E：ImageStore 删除导出 API 成功但物理文件残留（P1，已复现）
+#### Q12-E：ImageStore 删除导出 API 成功但物理文件残留（P2，已复现）
 
 - ImageStore 全流程 API 验收第一轮返回成功（920 秒），但进一步 SSH 核查发现输出对应的 `export/image-<hash>.raw` 仍存在，不能把 API success 等同于物理删除。
 - 当前 5.5.38 的存储 agent 日志显示：export 创建 `image-<hash>.raw`，DeleteExportedImage 及后续镜像删除却检查 `<hash>.qcow2`；原始镜像 manifest 与 FUSE 导出入口已移除，raw 副本保留。
@@ -183,3 +183,31 @@ Q12-E 复核与收尾：
 - **Q12-E 状态：本轮残留清理完成，云端删除缺陷尚待修复。ImageStore 整体清理验收不能标为通过。** 新探针保留对 HTTP 404/410 的要求，不将 206 或 API success 放宽成成功。
 
 本轮最终验证：`go test -race ./...`、`go vet ./...`、`git diff --check` 通过。最终 `packer-quality` VM、镜像、卷、快照查询均为空，原始源镜像仍 Ready；匹配两次 ImageStore 输出的导出文件为 0。凭证与私有 URL 的 Git 可见文件扫描匹配数为 0；`.env` 为 0600 且受 Git 忽略。Q12-C 已关闭；Q12-B 仅剩未测平台/组合，Q12-D 元数据服务和 Q12-E ImageStore 后端缺陷仍待处理。
+
+
+### ARM 环境补充验收准备（2026-10-14）
+
+用户指出 qaenv/redis-aarch64/build.pkr.hcl 中的独立 ARM 环境。已将目标连接及认证信息复制到本机忽略的 `.env`（0600），不提交原 HCL 或凭证。管理节点可达，读取版本接口后，认证资源查询明确返回 Access Key 不存在或禁用；qaenv 中未找到同一节点的其它配置。当前尚未创建 ARM 测试资源，需更新该环境可用的认证信息。
+
+验收脚本新增 `ZSTACK_ACC_ARCHITECTURE=aarch64`：显式传递架构，SSH provision 断言客户机 `uname -m` 为 aarch64，并断言输出模板 Architecture。已完成本地 race/vet 检查；尚不能标记 ARM 云端验收通过。此前用户要求保留的 ImageStore 导出复现现场保持不动。
+
+
+### Q12-E 后续复现与保留现场（2026-10-14）
+
+前述两份文件清理属于历史操作。用户随后明确要求不再手动清理，已重新使用直接 REST API 复现并保留现场：raw 输出镜像、停止的测试 VM、导入的源镜像及导出文件均保留，不再执行手动删除或 GC。删除导出 API 返回成功后，原下载地址仍返回 HTTP 206，inventory 的 exportUrl/MD5 已清空，UI 按 exportUrl 非空筛选时因此看不到它。qcow2 对照组删除后返回 404。
+
+该问题已按用户确认的 P2、Bug 类型、后端 Component 提交至 [ZSTAC-89526](http://jira.zstack.io/browse/ZSTAC-89526)。当前证据将问题定位到 Cloud ImageStore 删除行为；具体 agent 修复仍需后端确认。凭证、完整 URL 和原始日志保留在本机忽略目录，不进入 Git。上述“测试资源查询为空”的结论仅适用于历史轮次，不适用于此次主动保留的复现现场。
+
+
+### ARM 新环境验收结果（2026-10-14）
+
+用户提供替代 ARM 环境后，使用本机 `.env` 中的专用 ARM 凭证执行验收；目标 ZStack 版本为 5.5.38。选择已有公共网络和 ARM 集群，使用其 LocalStorage 与 ImageStore，未修改共享资源配置。输入为用户提供的 ZCF ARM64 v1.1.2 压缩 qcow2 URL，SSH 用户为 root。
+
+`TestAcceptanceCloud` 实测 **PASS，150.74 秒**，核查：
+
+- URL 导入独立临时源镜像，显式指定 aarch64；ARM VM 正常启动，实际放置符合指定集群。
+- 密码 SSH 登录成功，`id -un` 为 root，`uname -m` 为 aarch64，操作系统标识文件可读。
+- 关机、根盘制镜像、Ready 等待、ImageStore 导出成功；输出模板 Architecture 为 aarch64。
+- 本轮临时 VM 和导入源镜像清理完成，无 cleanup warnings；输出镜像 Destroy 成功，导出 URL 删除前可读、删除后返回 HTTP 404/410。
+
+这关闭了 ARM 基础流程的未验收项。ARM 多网卡、其它主存储组合和生成密钥/cloud-init 场景尚未单独认证。本轮 LocalStorage 路径通过不代表 Q12-E 的 Ceph 根盘 raw 导出问题已修复；ZSTAC-89526 及用户要求保留的旧环境现场保持原状态。私有原始证据为 `.acceptance/cloud-arm.log`，认证信息和日志不提交 Git。
