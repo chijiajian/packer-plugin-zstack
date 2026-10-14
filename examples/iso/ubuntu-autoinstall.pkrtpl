@@ -1,0 +1,26 @@
+#cloud-config
+autoinstall:
+  version: 1
+  refresh-installer:
+    update: false
+  locale: en_US.UTF-8
+  keyboard:
+    layout: us
+  identity:
+    hostname: packer-ubuntu
+    username: packer
+    password: '${password_hash}'
+  ssh:
+    install-server: true
+    allow-pw: true
+  storage:
+    layout:
+      name: direct
+  apt:
+    geoip: false
+    primary:
+      - arches: [amd64]
+        uri: http://mirrors.tuna.tsinghua.edu.cn/ubuntu
+  late-commands:
+    - curtin in-target --target=/target -- touch /etc/packer-installed
+  shutdown: reboot

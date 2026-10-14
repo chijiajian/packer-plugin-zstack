@@ -1,0 +1,25 @@
+text
+cdrom
+lang en_US.UTF-8
+keyboard us
+timezone UTC --utc
+network --bootproto=dhcp --device=link --activate --onboot=yes
+rootpw --iscrypted ${root_password_hash}
+firewall --enabled --service=ssh
+selinux --enforcing
+services --enabled=sshd,qemu-guest-agent
+ignoredisk --only-use=vda
+zerombr
+clearpart --all --initlabel --drives=vda
+autopart --type=plain --fstype=ext4
+bootloader --boot-drive=vda
+reboot
+%packages
+@^minimal-environment
+openssh-server
+qemu-guest-agent
+%end
+%post --erroronfail
+printf 'PermitRootLogin yes\nPasswordAuthentication yes\n' > /etc/ssh/sshd_config.d/90-packer.conf
+touch /etc/packer-installed
+%end

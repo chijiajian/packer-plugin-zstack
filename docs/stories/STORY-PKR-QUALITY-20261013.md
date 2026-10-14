@@ -284,3 +284,39 @@ Q14 实施进展：新增 `zstack-iso` builder（默认 builder 也可显式 `is
 认证范围为 x86_64、BIOS、Debian 13.7、SSH、Ceph 这一组合。Windows ISO/Autounattend/WinRM、ARM ISO、UEFI、其他安装器及存储组合未做本轮真实认证；已有 Windows qcow2/ARM 基础验收不替代 ISO 安装验收。应答文件由用户维护，插件不解析操作系统专用语义。
 
 示例补充验证：本机 Packer 1.9.4 使用隔离的开发插件目录执行 `packer validate -var-file=<本机私有变量文件> examples/iso` 通过。示例固定 `1.0.1-dev`，避免已有较高版本旧插件遮蔽 ISO builder；`templatefile` 使用相对模板目录的文件名，修复旧版 Packer 重复拼接 `path.root` 的问题。
+
+### Q15：ISO 跨 OS、架构与固件真实验收（2026-10-14，当前矩阵已完成）
+
+用户要求继续完成 Windows ISO、ARM ISO、UEFI 和其他主流 OS 的无人值守安装。本轮确认矩阵：Windows Server 2022 / Autounattend / WinRM / UEFI；Rocky Linux 9.4 ARM64 / Kickstart / UEFI；Ubuntu Server 24.04 LTS amd64 / Subiquity autoinstall / UEFI；Debian 13.7 amd64 / Preseed / UEFI（现有 BIOS Debian 用作基线）。用户确认先完成当前矩阵，不在本轮扩充其他 OS。仅使用标准安装 ISO、安装器应答文件和 HTTP/CD，不借助 ZStack userdata 或手工完成安装。
+
+每项必须验证：安装完成标记、实际 OS/架构/固件、介质卸载后的硬盘重启、SSH 或 WinRM 文件传输、根盘模板与导出、输出模板新 VM 启动和资源清理。先核对环境资源与安装介质；如遇环境限制，记录证据与具体未完成项，不将准备步骤或已有 qcow2 验收视为 ISO 通过。问题修复、示例、自动验收脚本及结果更新到同一 PR。
+
+Q15 已发现并修复的覆盖缺口：新增 `boot_mode`（Legacy/UEFI，未指定保持云端默认），通过官方 bootMode 标签设置导入镜像和构建 VM；产物复验主动去掉 override，检查模板固件继承。原 ISO 验收脚本只允许 SSH 且硬编码 x86_64，现扩展为 SSH/WinRM、按配置断言实际架构，复用 WinRM 上传/内容读取/删除及身份检查。配置非法值与 API 标签单测/race 已通过。
+
+Q15 Debian amd64 UEFI 完整自动验收 PASS，689.21 秒（`.acceptance/iso-debian-uefi.log`）：安装/辅助 CD、来宾 EFI 检查、双介质卸载后硬盘启动、SSH 文件传输、Ceph 导出、模板不指定 boot_mode 的新 VM EFI 启动、Destroy 后下载失效均通过。原 BIOS 验收继续作为已有基线。Windows 首轮控制台停在 Windows Boot Manager：连续空格打断菜单倒计时，启动命令需显式 Enter；将取消并清理此轮，再修正配置全量重跑，不手动进入安装代替自动验收。
+
+Q15 Rocky Linux 9.4 ARM64 / UEFI / LocalStorage + ImageStore 完整自动验收 PASS，554.86 秒（`.acceptance/iso-rocky-arm.log`）：内网标准 minimal ISO，HTTP Kickstart，无辅助 CD、无 ZStack userdata；实际 OS/version/aarch64/EFI、移除 ISO 后硬盘启动、SSH 文件上传/读取/删除、模板导出和模板不指定 boot_mode 的新 VM 启动均通过，Destroy 后导出 URL 404/410。精确 UUID 复查两台 VM、两张镜像及两块根盘均不存在。Windows 取消轮返回 context canceled，精确复查 VM、源/应答 ISO、根盘均不存在；加 Enter 的全新轮已启动。
+
+Q15 Ubuntu 首轮公网导入 20 分钟超时（1205.28 秒，未创建 VM），Cloud 随后删除了失败导入的 ImageVO。插件清理收到该精确 imageUuid 的 SYS.1003/ImageVO not found，仍报 Cleanup incomplete，属于清理幂等性误报。计划保留结构化 API 错误，并仅将匹配目标 UUID 与 ImageVO 的资源不存在视作图片 Delete/Expunge 已完成；鉴权、其他资源和其他 UUID 的错误仍返回。补充 API 回归及真实已不存在 UUID 的重复清理验证。Ubuntu 将使用官方 SHA256 校验后的本机 ISO 地址重新完整运行。
+
+Q15 清理幂等修复：保留 API error code/formatArgs，DeleteImage/ExpungeImage 只忽略精确 imageUuid/ImageVO 的 SYS.1003。错误 UUID、依赖 VolumeVO、鉴权错误不会被吞掉。race 回归通过；对 Ubuntu 失败导入 UUID 的真实重复 Delete/Expunge 验证 PASS，14.32 秒（`.acceptance/iso-cleanup-real.log`）。该 UUID 查询为空，首轮无 VM/根盘遗留。
+
+Ubuntu 24.04.5 amd64 ISO 本机分段下载后 SHA256 与官方发布校验一致：`97f3d7ffb032c3eb3b23d2c8be9cc76e60c2c1f2c0146ba5ba9fe01cafae0fd8`。改用本机只读 ISO 发布地址重跑完整安装。三套新增 HCL 示例（Ubuntu Server、Rocky ARM、Windows Server）已通过 Packer 1.9.4 的完整 validate。
+
+Q15 Windows Server 2022 AMD64 / UEFI / Ceph 完整自动验收 PASS，904.39 秒（`.acceptance/iso-windows-uefi.log`）：内网标准 Server ISO，Autounattend 自动 GPT 分区、Server 2022 签名 VirtIO 存储/网络驱动，首次登录脚本配置仅允许 runner IP 的 HTTPS WinRM/NTLM。实际 Server 2022/AMD64/UEFI 检查、管理员身份及真实文件上传/内容读取/删除、双介质卸载后的硬盘启动、Ceph 导出、模板不指定 boot_mode 的新 VM 同样复验、Destroy 后 HTTP 404/410 均通过。未使用 ZStack userdata，也未手工完成安装。此项不等于 Sysprep/generalize 或其他 Windows 版本认证。
+
+Q15 Ubuntu Server 24.04.5 amd64 / UEFI / Ceph 完整自动验收 PASS，1316.20 秒（`.acceptance/iso-ubuntu-uefi.log`）：官方校验 ISO、本机发布、cidata 应答盘驱动 Subiquity 自动安装；安装账户 packer、Ubuntu 24.04/x86_64/EFI、SSH 文件上传/读取/删除、卸载双介质后硬盘重启均通过。来宾安装器下载内核更新期间仅通过控制台读取安装日志，没有手工完成安装。模板 Ready、Ceph 导出、无 boot_mode override 的产物新 VM 同样复验、Destroy 后导出 URL 404/410 均通过。精确 UUID 复查两台 VM、四张镜像（包括首轮失败导入）及两块根盘均不存在。
+
+#### Q15 最终矩阵
+
+| 标准 ISO / 架构 | 固件 | 连接 | 存储 | 完整验收 |
+| --- | --- | --- | --- | --- |
+| Debian 13.7 / amd64 | BIOS | SSH | Ceph | PASS，731.30 秒（Q14 基线） |
+| Debian 13.7 / amd64 | UEFI | SSH | Ceph | PASS，689.21 秒 |
+| Rocky Linux 9.4 / ARM64 | UEFI | SSH | LocalStorage + ImageStore | PASS，554.86 秒 |
+| Windows Server 2022 / amd64 | UEFI | HTTPS WinRM | Ceph | PASS，904.39 秒 |
+| Ubuntu Server 24.04.5 LTS / amd64 | UEFI | SSH | Ceph | PASS，1316.20 秒 |
+
+各项均覆盖无人值守安装、实际系统/架构/固件、介质卸载后的硬盘启动、文件传输、根盘模板、导出及删除探针和新 VM 产物复验；不使用 ZStack userdata。构建及取消轮的自有资源按记录 UUID 独立复查为空；未记录到的短生命周期根盘另按本轮名称查询为空。Q12-E 保留现场不参与本轮清理。
+
+本地最终 `make test plugin-check`、race/vet、格式、生成 schema 与模块图检查通过，三套新增 HCL 在 Packer 1.9.4 完整 validate 通过。修复包括固件配置/跨架构及 WinRM 验收缺口、Windows 启动菜单需 Enter 的示例配置，以及失败导入清理幂等误报。凭证和密码 hash 仅保存在忽略目录；Windows generalize/Sysprep 与其他 OS/存储组合不在本轮认证范围。

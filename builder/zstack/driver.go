@@ -5,11 +5,12 @@ package zstack
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"time"
 
 	"github.com/zstackio/zstack-sdk-go-v2/pkg/param"
 	"github.com/zstackio/zstack-sdk-go-v2/pkg/view"
-	"time"
 )
 
 // Retain SDK wire models with a transport that enforces cancellation and deadlines.
@@ -340,9 +341,13 @@ func (d *ZStackDriver) DestroyVmInstance(uuid string) error {
 	})
 }
 func (d *ZStackDriver) DeleteImage(uuid string) error {
-	return d.request(func(ctx context.Context) error {
+	err := d.request(func(ctx context.Context) error {
 		return d.client.Delete(ctx, "v1/images", uuid, string(param.DeleteModePermissive))
 	})
+	if imageAlreadyAbsent(err, uuid) {
+		return nil
+	}
+	return err
 }
 func (d *ZStackDriver) DeleteDataVolume(uuid string) error {
 	return d.request(func(ctx context.Context) error {
@@ -355,9 +360,13 @@ func (d *ZStackDriver) DeleteVmInstance(uuid string) error {
 	})
 }
 func (d *ZStackDriver) ExpungeImage(uuid string) error {
-	return d.request(func(ctx context.Context) error {
+	err := d.request(func(ctx context.Context) error {
 		return d.client.Put(ctx, "v1/images", uuid, map[string]any{"expungeImage": map[string]any{}}, nil)
 	})
+	if imageAlreadyAbsent(err, uuid) {
+		return nil
+	}
+	return err
 }
 func (d *ZStackDriver) ExpungeDataVolume(uuid string) error {
 	return d.request(func(ctx context.Context) error {
@@ -369,4 +378,12 @@ func (d *ZStackDriver) DeleteExportedImage(backupStorageUUID, imageUUID string) 
 	return d.request(func(ctx context.Context) error {
 		return d.client.Delete(ctx, "v1/backup-storage/"+backupStorageUUID+"/exported-images", imageUUID, string(param.DeleteModePermissive))
 	})
+}
+
+// A failed/cancelled import may be removed by the cloud before our cleanup.
+// Only ignore a structured not-found error for this exact image, never text
+// matches or missing dependencies belonging to another resource.
+func imageAlreadyAbsent(err error, uuid string) bool {
+	var apiErr *apiError
+	return uuid != "" && errors.As(err, &apiErr) && apiErr.Code == "SYS.1003" && len(apiErr.FormatArgs) == 3 && apiErr.FormatArgs[0] == "imageUuid" && apiErr.FormatArgs[1] == uuid && apiErr.FormatArgs[2] == "ImageVO"
 }

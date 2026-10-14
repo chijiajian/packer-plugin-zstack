@@ -11,3 +11,5 @@ Required additions to the regular ZStack configuration are `root_disk_offering_u
 Optional installation settings are `http_directory`/`http_content`, `http_ip`, `cd_files`/`cd_content`/`cd_label`, and `boot_command`/`boot_wait`/`boot_key_interval`/`boot_keygroup_interval`. Boot commands require access to the host's TCP VNC console. Generated answer CDs require a local ISO creation tool and backup-storage access to the Packer runner's temporary HTTP publisher.
 
 The builder checks the installed OS, stops it, detaches installation media, selects hard-disk boot and reconnects/checks again before provisioning. It removes build-owned temporary resources on exit. Existing installer images are never deleted; `keep_source_image` can retain a URL-imported installer. Generated answer CDs are always cleaned up.
+
+`boot_mode` accepts `Legacy` or `UEFI`; leaving it unset preserves the image/cloud default. The selected mode is sent as ZStack `bootMode` system tags on source import and VM creation. Output-template verification must omit the override to check the image retains its firmware metadata.
