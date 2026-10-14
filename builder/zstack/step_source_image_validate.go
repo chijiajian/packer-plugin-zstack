@@ -23,6 +23,18 @@ func (s *StepSourceImageValidate) Run(ctx context.Context, state multistep.State
 
 	// AC-002-01: Skip image query when image_uuid is provided (UUID takes priority)
 	if config.ImageConfig.ImageUuid != "" {
+		if config.ISOInstall {
+			image, err := stepDriver(ctx, state).GetImage(config.ImageUuid)
+			if err != nil {
+				return halt(state, err)
+			}
+			if image == nil || image.MediaType != "ISO" || image.Status != "Ready" || image.State != "Enabled" {
+				return halt(state, fmt.Errorf("ISO source must be an Enabled Ready ISO"))
+			}
+			if err := config.checkISOSource(image); err != nil {
+				return halt(state, err)
+			}
+		}
 		log.Printf("[INFO] Using provided source image UUID: %s", config.ImageConfig.ImageUuid)
 		ui.Say(fmt.Sprintf("Using provided source image UUID: %s", config.ImageConfig.ImageUuid))
 		return multistep.ActionContinue
@@ -38,6 +50,14 @@ func (s *StepSourceImageValidate) Run(ctx context.Context, state multistep.State
 		return halt(state, fmt.Errorf("image %q is not ready (status=%s, state=%s)", config.SourceImage, images[0].Status, images[0].State))
 	}
 
+	if config.ISOInstall && images[0].MediaType != "ISO" {
+		return halt(state, fmt.Errorf("source image must have mediaType ISO"))
+	}
+	if config.ISOInstall {
+		if err := config.checkISOSource(&images[0]); err != nil {
+			return halt(state, err)
+		}
+	}
 	config.ImageConfig.ImageUuid = images[0].UUID
 	ui.Say("Source image validated")
 	return multistep.ActionContinue
@@ -61,3 +81,17 @@ func validateImage(ctx context.Context, state multistep.StateBag) ([]view.ImageI
 }
 
 func (s *StepSourceImageValidate) Cleanup(state multistep.StateBag) {}
+
+func (c *Config) checkISOSource(image *view.ImageInventoryView) error {
+	if c.Platform == "" {
+		c.Platform = image.Platform
+	}
+	if c.Architecture == "" {
+		c.Architecture = image.Architecture
+		return nil
+	}
+	if image.Architecture != "" && c.Architecture != image.Architecture {
+		return fmt.Errorf("configured architecture does not match the source ISO")
+	}
+	return nil
+}

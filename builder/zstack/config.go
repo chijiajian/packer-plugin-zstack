@@ -14,6 +14,7 @@ import (
 	"github.com/hashicorp/packer-plugin-sdk/multistep/commonsteps"
 	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
 	"github.com/hashicorp/packer-plugin-sdk/template/config"
+	"github.com/hashicorp/packer-plugin-sdk/template/interpolate"
 )
 
 const (
@@ -26,6 +27,7 @@ const (
 //go:generate go tool packer-sdc mapstructure-to-hcl2 -type Config
 
 type Config struct {
+	ISOConfig              `mapstructure:",squash"`
 	common.PackerConfig    `mapstructure:",squash"`
 	commonsteps.HTTPConfig `mapstructure:",squash"`
 	Comm                   communicator.Config `mapstructure:",squash"`
@@ -162,6 +164,7 @@ func (c *Config) Prepare(raws ...any) error {
 	err := config.Decode(c, &config.DecodeOpts{
 		Interpolate:        true,
 		InterpolateContext: &c.ctx,
+		InterpolateFilter:  &interpolate.RenderFilter{Exclude: []string{"boot_command"}},
 	}, raws...)
 	if err != nil {
 		log.Printf("[ERROR] Failed to decode configuration: %v", err)
@@ -179,6 +182,9 @@ func (c *Config) Prepare(raws ...any) error {
 		log.Print("[INFO] Configuring source image from URL")
 		if c.Format == "" {
 			c.Format = "qcow2"
+			if c.ISOInstall {
+				c.Format = "iso"
+			}
 			log.Printf("[DEBUG] Default image format set to: %s", c.Format)
 		}
 		if c.Platform == "" {
@@ -226,6 +232,9 @@ func (c *Config) Prepare(raws ...any) error {
 		}
 	}
 
+	for _, e := range c.prepareISO() {
+		errs = packersdk.MultiErrorAppend(errs, e)
+	}
 	for _, e := range c.validateBuild() {
 		errs = packersdk.MultiErrorAppend(errs, e)
 	}

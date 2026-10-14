@@ -1,0 +1,38 @@
+d-i preseed/early_command string mkdir -p /usr/lib/apt-setup/generators; printf '%s\n' '#!/bin/sh' 'echo '"'"'Acquire::cdrom::AutoDetect "false";'"'"' > "$ROOT/etc/apt/apt.conf.d/00packer-cdrom"' > /usr/lib/apt-setup/generators/39packer-cdrom; chmod 755 /usr/lib/apt-setup/generators/39packer-cdrom
+d-i debian-installer/locale string en_US.UTF-8
+d-i keyboard-configuration/xkb-keymap select us
+d-i netcfg/choose_interface select auto
+d-i netcfg/get_hostname string packer-iso
+d-i netcfg/get_domain string local
+d-i netcfg/disable_autoconfig boolean false
+d-i mirror/country string manual
+d-i mirror/http/hostname string deb.debian.org
+d-i mirror/http/directory string /debian
+d-i mirror/http/proxy string
+d-i passwd/root-login boolean true
+d-i passwd/root-password-crypted password ${root_password_hash}
+d-i passwd/make-user boolean false
+d-i clock-setup/utc boolean true
+d-i time/zone string UTC
+d-i clock-setup/ntp boolean false
+d-i partman-auto/disk string /dev/vda
+d-i partman-auto/method string regular
+d-i partman-auto/choose_recipe select atomic
+d-i partman/default_filesystem string ext4
+d-i partman-lvm/device_remove_lvm boolean true
+d-i partman-md/device_remove_md boolean true
+d-i partman/confirm_write_new_label boolean true
+d-i partman/choose_partition select finish
+d-i partman/confirm boolean true
+d-i partman/confirm_nooverwrite boolean true
+d-i apt-setup/cdrom/set-first boolean false
+d-i apt-setup/services-select multiselect
+tasksel tasksel/first multiselect standard, ssh-server
+d-i pkgsel/include string openssh-server qemu-guest-agent
+d-i pkgsel/upgrade select none
+popularity-contest popularity-contest/participate boolean false
+d-i grub-installer/only_debian boolean true
+d-i grub-installer/bootdev string /dev/vda
+d-i preseed/late_command string mkdir -p /tmp/packer-answer; mount -o ro /dev/sr1 /tmp/packer-answer; /bin/sh /tmp/packer-answer/post-install.sh
+d-i cdrom-detect/eject boolean true
+d-i finish-install/reboot_in_progress note
