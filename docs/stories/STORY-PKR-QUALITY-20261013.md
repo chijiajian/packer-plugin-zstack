@@ -25,7 +25,7 @@
 | Q09 | P2 | SDK 与 Go 升级 | ZStack SDK v0.0.10；Packer SDK v0.6.12；Go 1.26.9（满足 SDK >=1.26.8）；go.mod/.go-version/CI 一致；检查 go-cty 替代兼容性 | 已完成（验证见下） |
 | Q10 | P2 | 测试与 CI 门禁 | race/vet/build/HCL schema/插件检查；新增真实 Driver HTTP 契约及 Builder 流程回归；PR 和发布前执行测试 | 已完成（验证见下） |
 | Q11 | P2 | 放置、网络与磁盘配置扩展 | 可选 zone/cluster/host、根盘规格、多个 L3 网络、数据盘规格；请求映射测试；明确仅产出根盘模板及数据盘清理策略 | 已完成（验证见下） |
-| Q12 | P2 | 文档与验收 | 中英文说明、迁移注意事项、示例更新；记录本地验证；真实 ZStack Linux/ARM/快照/取消/导出验收单独标记 | 文档完成；部分云端验收待环境确认 |
+| Q12 | P2 | 文档与验收 | 中英文说明、迁移注意事项、示例更新；记录本地验证；真实 ZStack Linux/ARM/快照/取消/导出验收单独标记 | 文档完成；剩余 Q12-B/D/E 见验收记录 |
 
 执行顺序：先 Q09（建立统一编译环境），再 Q01–Q08、Q11，最后 Q10、Q12；各任务的验收测试随实现加入。
 
@@ -91,8 +91,8 @@ v0.0.10 的 `pkg/util/httputils/httputils.go:requestInternal` 使用 `http.NewRe
 - 最终库存核查：本次 `packer-quality-*` VM、镜像、快照及对应根盘查询均为 0；取消测试时间之后的新建数据盘查询无残留；原源镜像仍为 Ready。此结论不涵盖上文首轮导出副本的存储文件。
 - 安全核查：`.env` 权限 `0600`，`git check-ignore` 命中，`git ls-files .env` 为空；逐文件比对本次 AK/SK，Git 可见文件匹配数为 0。凭证和验收日志不进入提交；代码通过 PR 提交审核，本次不发布版本。
 - **Q12-A（密码及镜像准备通过；密钥受元数据服务阻塞）**：用户提供的两套镜像已完成非 root/root 密码认证及 SSH provision hook 全流程验收。用户提供的 Ubuntu 镜像最初禁用 cloud-init；按追加指示，通过 SSH 安装 Guest Tools 并修正 cloud-init，已制成临时模板并重验；客户机访问元数据端点得到空响应，密钥认证仍未通过，后续见 Q12-D。旧源镜像的公钥失败记录作为历史证据保留。
-- **Q12-B（待环境）**：ARM、Windows/WinRM、bastion、ImageStore、多网卡和放置组合的真实验收。当前覆盖为本地 HCL/参数/生命周期回归，不代表全部部署组合通过。
-- **Q12-C（待存储核查）**：确认首轮已 expunge 镜像 `5389ceda4d92410983de461dbe883ba5` 的导出副本是否残留；管理 API 因 ImageVO 不存在无法删除。后续轮次已验证先删除副本的修复流程。
+- **Q12-B（部分完成，2026-10-14）**：已实测 ImageStore、双/三网卡、默认网卡顺序及 zone/cluster/host 放置；ImageStore 暴露导出残留缺陷 Q12-E。ARM、Windows/WinRM、bastion 仍未云端验收，不代表全部部署组合通过。
+- **Q12-C（已完成，2026-10-14）**：首轮镜像 `5389ceda4d92410983de461dbe883ba5` 的存储侧核查通过：RBD 数据、导出授权对象和 RBD trash 均无残留，证据见下节。后续轮次已验证先删除副本的修复流程。
 
 SSH systemTag 请求格式已与[官方 CreateVmInstance 文档](https://www.zstack.io/docs/4.3.6/html5-en/ZStack_Dev_Guide/topic/ZStack_2.1_Dev_Guide_0039.html)核对：传递公钥明文；userdata 另外进行 base64 编码。
 
@@ -131,4 +131,55 @@ SSH systemTag 请求格式已与[官方 CreateVmInstance 文档](https://www.zst
 - **Q12-D（待云端排查，P2）**：排查当前测试 L3 网络的 Userdata 服务及对应元数据代理/后端，确认为何元数据 HTTP 请求被直接关闭。网络 inventory 已声明启用 Userdata；服务故障的具体根因尚未确认。验收条件：新 VM 首次启动能读取其 instance-id，cloud-init 正常完成，然后 `key-cleanup` 场景通过。需进一步查看承载该服务的主机日志，不能通过扩大 Packer SSH 超时或手工写入公钥来替代验收。
 - 本地 `go test -race ./...` 与 `go vet ./...` 通过；云端密钥用例仍为未通过。凭证、远程脚本输出与临时私钥继续只留在 Git 忽略的本机文件中。
 
-本轮收尾（2026-10-14）：准备 VM、导入源镜像、Prepared 模板均已删除并 expunge；`packer-quality-*` VM/镜像库存为 0，关联准备根盘及测试命名卷库存为 0，原有源镜像仍 Ready。`.env` 保持 0600，AK/SK、独有 SSH 密码和私有镜像 URL 在 Git 可见文件中的匹配数为 0。Q12-D 与先前 Q12-B/C 仍未完成。
+本轮收尾（2026-10-14）：准备 VM、导入源镜像、Prepared 模板均已删除并 expunge；`packer-quality-*` VM/镜像库存为 0，关联准备根盘及测试命名卷库存为 0，原有源镜像仍 Ready。`.env` 保持 0600，AK/SK、独有 SSH 密码和私有镜像 URL 在 Git 可见文件中的匹配数为 0。当时 Q12-D 与 Q12-B/C 尚未完成；10 月 14 日的后续核查及更新状态见下节。
+
+
+### 2026-10-14：补充验收执行任务
+
+- ImageStore 当前为 Enabled/Connected，不属于缺少环境。本轮执行 URL 导入、SSH 密码 provision、根盘制镜像、导出及产物清理。
+- 在当前网络和主机中选择兼容组合，验证多网卡、显式默认网卡及放置约束，核对实际 VM inventory，分别记录云端配置与客户机网络验证范围。
+- 使用备份存储节点的受控 SSH 访问核查 Q12-C 指定 UUID 的导出文件；只处理已确认归属本次验收的残留。
+
+
+#### Q12-C 存储侧核查结果
+
+通过受控 SSH 对 Ceph 备份存储做只读核查，未执行额外删除：
+
+- 从该 UUID 的历史 agent 日志确认实际 installPath，避免以猜测的 pool/路径检查。
+- 当前环境的 `cephbackupstorage/cephagent.py` 实现直接只读打开 RBD 并流式提供下载；授权保存在同 pool 的 `<imageUUID>-export` RADOS 对象，不创建独立 qcow2 导出文件。该环境的镜像删除实现也会删除授权对象。
+- 对历史路径执行 `rbd info` 返回 ENOENT；`rados stat <imageUUID>-export` 返回 ENOENT；`rbd trash ls --format json` 按该 UUID 精确过滤为空。
+- 私有证据：`.acceptance/ceph-target-confirm.log`、`original-export-check.log`、`ceph-export-impl.log`。节点凭证仅保留在忽略的 `.env`。
+
+该结论仅针对本环境的指定历史镜像与 agent 实现；插件仍显式调用删除导出 API，以覆盖不同备份存储的语义。
+
+
+#### 多网卡与放置矩阵
+
+| 组合 | 结果 | 核查范围 |
+|---|---|---|
+| 两张网卡，管理网为第一张及默认网，指定 zone/cluster/host，Ceph 输出 | 通过，204 秒 | 实际双 NIC/IP、默认网、communicator IP、放置 inventory、密码 SSH 身份及命令；导出 URL 可读，Destroy 后 HTTP 404/410 |
+| 两张网卡，私网为第二张及默认网，指定 zone/cluster/host，ImageStore 输出 | 网络/放置通过；导出清理失败，896 秒 | 实际双 NIC/IP、默认网及 communicator IP 正确；制镜像/导出成功，Destroy 后下载仍 HTTP 206，见 Q12-E |
+| 三张网卡，管理网位于第三张并设为默认网，另一宿主机，Ceph 输出 | 通过，131 秒 | 三个 NIC/IP、默认网、communicator IP、zone/cluster/host；导出 URL 可读，Destroy 后 HTTP 404/410 |
+
+双网卡 SSH 场景验证管理网的真实连通性；communicator=none 场景验证云端分配与插件 IP 选择。尚未把每张客户机网卡的 DHCP、路由或跨网互通都列为通过。选用已接入同一集群的既有网络，未修改共享网络和路由器。
+
+
+#### Q12-E：ImageStore 删除导出 API 成功但物理文件残留（P1，已复现）
+
+- ImageStore 全流程 API 验收第一轮返回成功（920 秒），但进一步 SSH 核查发现输出对应的 `export/image-<hash>.raw` 仍存在，不能把 API success 等同于物理删除。
+- 当前 5.5.38 的存储 agent 日志显示：export 创建 `image-<hash>.raw`，DeleteExportedImage 及后续镜像删除却检查 `<hash>.qcow2`；原始镜像 manifest 与 FUSE 导出入口已移除，raw 副本保留。
+- 插件已按要求在 expunge 前调用删除导出 API。本缺陷定位于当前 ImageStore 后端删除行为；不在插件内引入节点 SSH 或文件系统删除。增加真实下载探针以防验收误判。
+- 执行任务：复核第二轮下载 URL，记录删除后的状态；核对本轮 UUID → installPath hash → 实际导出路径后仅清理本轮残留，复查 API 库存和物理文件。后续云端修复需兼容实际导出格式及文件名，并回归链接失效和物理删除。
+
+
+ImageStore 性能记录：两组 Ceph 根盘到 ImageStore 的制镜像耗时分别约 9 分 06 秒、9 分 50 秒，均超过 `image_ready_timeout` 的默认 5 分钟。本轮显式设为 10 分钟；实际使用应按镜像大小和带宽增加该值及 `api_timeout`，不能将大镜像传输误判为 SDK 不兼容。
+
+
+Q12-E 复核与收尾：
+
+- 第二轮（输出 `785347c515124338897f2d1b5d5ac25c`）896 秒，新增 HTTP 探针在 Destroy 前读取成功，Destroy 后仍返回 **206**，测试如期判定失败。第一轮输出为 `af224de525704def8ff6e10bafd731e4`。两轮 API inventory 均已删除，但对应 raw 文件仍可下载。
+- 根据此前保存的两个 installPath hash、agent export 日志及文件类型/大小/修改时间核对归属，仅删除这两份 `image-<hash>.raw`（各 40 GiB，合计实际占用 80 GiB）。没有修改共享 agent 或其它文件。
+- 定点清理后两个下载地址均返回 **404**；export 目录按两个 hash 复查无文件。私有证据：`store-export-detail.private.log`、`imagestore-pre-cleanup-probe.log`、`imagestore-owned-cleanup.log`、`imagestore-post-cleanup-probe.log`、`imagestore-final-files.log`。
+- **Q12-E 状态：本轮残留清理完成，云端删除缺陷尚待修复。ImageStore 整体清理验收不能标为通过。** 新探针保留对 HTTP 404/410 的要求，不将 206 或 API success 放宽成成功。
+
+本轮最终验证：`go test -race ./...`、`go vet ./...`、`git diff --check` 通过。最终 `packer-quality` VM、镜像、卷、快照查询均为空，原始源镜像仍 Ready；匹配两次 ImageStore 输出的导出文件为 0。凭证与私有 URL 的 Git 可见文件扫描匹配数为 0；`.env` 为 0600 且受 Git 忽略。Q12-C 已关闭；Q12-B 仅剩未测平台/组合，Q12-D 元数据服务和 Q12-E ImageStore 后端缺陷仍待处理。

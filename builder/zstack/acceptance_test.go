@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"strings"
 	"testing"
@@ -21,9 +23,9 @@ func TestAcceptanceCloud(t *testing.T) {
 	if os.Getenv("ZSTACK_ACC") != "1" {
 		t.Skip("set ZSTACK_ACC=1 and ZSTACK_ACC_* resource IDs to run cloud acceptance")
 	}
-	for _, key := range []string{"ZSTACK_ACC_NETWORK_UUID", "ZSTACK_ACC_BACKUP_STORAGE_UUID"} {
-		require.NotEmpty(t, os.Getenv(key), key)
-	}
+	require.NotEmpty(t, os.Getenv("ZSTACK_ACC_BACKUP_STORAGE_UUID"), "ZSTACK_ACC_BACKUP_STORAGE_UUID")
+	networks := strings.FieldsFunc(os.Getenv("ZSTACK_ACC_NETWORK_UUIDS"), func(r rune) bool { return r == ',' || r == ' ' })
+	require.True(t, (len(networks) > 0) != (os.Getenv("ZSTACK_ACC_NETWORK_UUID") != ""), "set either NETWORK_UUID or NETWORK_UUIDS")
 	imageUUID, imageURL := os.Getenv("ZSTACK_ACC_IMAGE_UUID"), os.Getenv("ZSTACK_ACC_IMAGE_URL")
 	require.True(t, (imageUUID != "") != (imageURL != ""), "set exactly one of ZSTACK_ACC_IMAGE_UUID and ZSTACK_ACC_IMAGE_URL")
 	name := fmt.Sprintf("packer-quality-%d", time.Now().UnixNano())
@@ -39,6 +41,18 @@ func TestAcceptanceCloud(t *testing.T) {
 		"communicator": comm, "vm_running_timeout": "10m", "image_ready_timeout": "10m",
 		"api_timeout": "10m", "cleanup_timeout": "5m",
 		"skip_export": os.Getenv("ZSTACK_ACC_SKIP_EXPORT") == "1",
+	}
+	if len(networks) > 0 {
+		delete(raw, "network_uuid")
+		raw["network_uuids"] = networks
+	}
+	for env, field := range map[string]string{
+		"ZSTACK_ACC_DEFAULT_NETWORK_UUID": "default_network_uuid",
+		"ZSTACK_ACC_ZONE_UUID":            "zone_uuid", "ZSTACK_ACC_CLUSTER_UUID": "cluster_uuid", "ZSTACK_ACC_HOST_UUID": "host_uuid",
+	} {
+		if value := os.Getenv(env); value != "" {
+			raw[field] = value
+		}
 	}
 	if imageURL != "" {
 		raw["source_image_url"] = imageURL
@@ -63,6 +77,44 @@ func TestAcceptanceCloud(t *testing.T) {
 	defer cancel()
 	ui := &packersdk.BasicUi{Reader: os.Stdin, Writer: os.Stdout, ErrorWriter: os.Stderr}
 	hook := &acceptanceHook{ssh: comm == "ssh", expectedUser: os.Getenv("ZSTACK_ACC_SSH_USERNAME")}
+	if len(networks) > 0 || os.Getenv("ZSTACK_ACC_ZONE_UUID") != "" || os.Getenv("ZSTACK_ACC_CLUSTER_UUID") != "" || os.Getenv("ZSTACK_ACC_HOST_UUID") != "" {
+		hook.verify = func(ctx context.Context) error {
+			d, e := b.config.AccessConfig.driver(ctx, time.Minute)
+			if e != nil {
+				return e
+			}
+			vm, e := d.GetVmInstance(b.config.InstanceUuid)
+			if e != nil {
+				return e
+			}
+			if len(networks) > 0 {
+				actual := map[string]string{}
+				for _, nic := range vm.VmNics {
+					actual[nic.L3NetworkUuid] = nic.Ip
+				}
+				if len(vm.VmNics) != len(networks) {
+					return fmt.Errorf("unexpected NIC count: %d", len(vm.VmNics))
+				}
+				for _, n := range networks {
+					if actual[n] == "" {
+						return fmt.Errorf("missing NIC/IP for network %s", n)
+					}
+				}
+				if expected := os.Getenv("ZSTACK_ACC_DEFAULT_NETWORK_UUID"); expected != "" {
+					if vm.DefaultL3NetworkUuid != expected || b.config.IP != actual[expected] {
+						return fmt.Errorf("default network or communicator IP mismatch")
+					}
+				}
+			}
+			for env, actual := range map[string]string{"ZSTACK_ACC_ZONE_UUID": vm.ZoneUuid, "ZSTACK_ACC_CLUSTER_UUID": vm.ClusterUuid, "ZSTACK_ACC_HOST_UUID": vm.HostUuid} {
+				if expected := os.Getenv(env); expected != "" && expected != actual {
+					return fmt.Errorf("placement mismatch for %s", env)
+				}
+			}
+			t.Logf("verified %d NICs, default network %s, host %s", len(vm.VmNics), vm.DefaultL3NetworkUuid, vm.HostUuid)
+			return nil
+		}
+	}
 	scenario := os.Getenv("ZSTACK_ACC_SCENARIO")
 	var cancelledVM string
 	if scenario == "cancel" {
@@ -150,18 +202,62 @@ func TestAcceptanceCloud(t *testing.T) {
 		require.NoError(t, err)
 		require.Empty(t, sources, "temporary imported source image must be expunged")
 	}
+	if os.Getenv("ZSTACK_ACC_CHECK_EXPORT") == "1" {
+		url, ok := artifact.State("image_url").(string)
+		require.True(t, ok)
+		require.NotEmpty(t, url, "export must produce a download URL")
+		// Read only a few bytes; do not download a multi-GB image or log its URL.
+		require.NoError(t, acceptanceExportProbe(ctx, url, true))
+		require.NoError(t, artifact.Destroy())
+		require.NoError(t, acceptanceExportProbe(ctx, url, false))
+		t.Log("export URL readable before Destroy and absent afterward")
+	}
+}
+
+func acceptanceExportProbe(ctx context.Context, url string, exists bool) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return fmt.Errorf("invalid export URL")
+	}
+	req.Header.Set("Range", "bytes=0-3")
+	client := &http.Client{Timeout: 30 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("export URL request failed (exists=%t)", exists)
+	}
+	defer resp.Body.Close()
+	if !exists {
+		if resp.StatusCode != http.StatusNotFound && resp.StatusCode != http.StatusGone {
+			return fmt.Errorf("deleted export returned HTTP %d", resp.StatusCode)
+		}
+		return nil
+	}
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
+		return fmt.Errorf("export returned HTTP %d", resp.StatusCode)
+	}
+	var header [4]byte
+	if _, err := io.ReadFull(resp.Body, header[:]); err != nil {
+		return fmt.Errorf("export could not supply four bytes")
+	}
+	return nil
 }
 
 type acceptanceHook struct {
 	ssh          bool
 	expectedUser string
 	after        func(context.Context) error
+	verify       func(context.Context) error
 	comm         packersdk.Communicator
 }
 
 func (h *acceptanceHook) Run(ctx context.Context, name string, ui packersdk.Ui, comm packersdk.Communicator, data interface{}) error {
 	if name != packersdk.HookProvision {
 		return nil
+	}
+	if h.verify != nil {
+		if err := h.verify(ctx); err != nil {
+			return err
+		}
 	}
 	if h.ssh {
 		h.comm = comm
