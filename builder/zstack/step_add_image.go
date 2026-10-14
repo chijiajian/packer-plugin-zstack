@@ -57,6 +57,9 @@ func (s *StepAddImage) Run(ctx context.Context, state multistep.StateBag) multis
 		imageParam.Params.BackupStorageUuids = []string{config.BackupStorageUuid}
 	}
 
+	if config.ISOInstall {
+		imageParam.Params.MediaType = strPtr("ISO")
+	}
 	r := resources(state)
 	r.ImportedImage = newResource()
 	imageParam.Params.ResourceUuid = &r.ImportedImage.UUID

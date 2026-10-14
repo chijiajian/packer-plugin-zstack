@@ -247,3 +247,40 @@ Q12-E 复核与收尾：
 - 原因：等待镜像/VM 的步骤同时创建 `context.WithTimeout` 和 `time.After`，两个超时信号竞争，返回错误不一致。此前单次本地检查未触发，不能证明该路径稳定。
 - 修复：两处均使用 context 的单一截止时间，超时错误附带资源上下文并通过 `%w` 保留 `context.DeadlineExceeded`；主动取消保留 `context.Canceled`。补充错误类型断言。
 - 本地验证：相关等待测试开启 race 重复 100 次通过；与 CI 相同的 `make test plugin-check`、格式、`go mod tidy` 和生成 schema 差异检查均通过。云端 CI 结果以修复提交的 Actions 为准。
+
+### Q14：ISO 安装与应答文件支持（2026-10-14，已实现并通过 x86 Linux 验收）
+
+目标：参考 vSphere ISO 与 Proxmox ISO，将安装介质启动、应答文件传递、真实操作系统安装与根盘模板制作串成完整流程。安装阶段禁止依赖 ZStack userdata/sshkey 元数据；安装账户、SSH/WinRM 和临时公钥由用户提供的安装应答文件配置。
+
+实施任务：
+- 显式 ISO 构建模式，导入时使用 ISO mediaType，校验已有 ISO、根盘规格、互斥源和必要连接参数；默认镜像构建行为保持兼容。
+- 接入 Packer SDK HTTP 服务与辅助 CD 生成（cd_files/cd_content/cd_label）；生成的辅助 ISO 导入自有云资源后挂载，应答文件由用户通过 file/templatefile 编写，插件不替代操作系统安装器解析语义。
+- 支持 boot_command/boot_wait，通过 ZStack 返回的 VNC 控制台发送安装参数；支持显式可达 HTTP 地址。安装介质、应答文件介质和硬盘启动顺序分开管理。
+- 等待 SSH/WinRM 后验证已安装系统，卸载安装介质并从根盘重新启动、重新连接后才允许配置和制镜像，不能以 VM Running 或 communicator=none 作为安装成功。
+- 复用现有临时密钥清理、关机、根盘制镜像、导出和所有权清理；失败/取消也清理本轮 VM、辅助 ISO、自动导入源等资源，不删除用户已有 ISO，不触碰保留的 Q12-E 现场。
+- 配置、HTTP/CD 文件传递、API 参数、取消和清理测试；示例与使用限制文档；执行 race/vet/plugin-check/schema 检查。
+- 在 x86 真实环境使用标准安装 ISO 和无人值守应答文件完成安装、硬盘启动、SSH 命令/文件传输、根盘模板及产物重启验证，记录资源 UUID、耗时及独立导出探针；Windows/ARM 等未执行组合明确列出，不扩大认证范围。
+
+参考：[vSphere ISO](https://github.com/vmware/packer-plugin-vsphere/blob/main/builder/vsphere/iso/builder.go)、[Proxmox 共享构建步骤](https://github.com/hashicorp/packer-plugin-proxmox/blob/main/builder/proxmox/common/builder.go)。凭证和应答文件中的秘密只保存本机忽略目录，不提交 Git。
+
+Q14 实施进展：新增 `zstack-iso` builder（默认 builder 也可显式 `iso_install=true`），HTTP/CD 应答文件传递、VNC 启动命令、两次安装检查及卸载介质后的硬盘启动已接入。ISO 模式校验并禁止 ZStack userdata/sshkey，且 VM 参数生成层也不会发送这些标签。新增配置、导入/启动 API、已有 ISO 校验、CD 发布/所有权清理及取消测试，提供 Debian 示例。
+
+真实环境准备使用 ZStack 5.5.38 / x86 / Ceph，Debian 13.7.0 amd64 netinst 标准 ISO，SHA256 `a7ef94ac2fb9a7fec454552abd629b7cc9d5155c886165a45649f5ce6167e355` 已与 Debian 官方校验文件比对。首轮发现 SDK 生成的约 900 KiB 辅助盘触发 ZStack 1 MiB 最小镜像限制，已添加 ISO 尾部零填充和回归断言。下一轮读取 Preseed 并完成基础系统安装，但 Debian APT 自动扫描辅助 CD，因其不含包索引而进入交互提示；中止该轮并按精确 UUID 删除本轮 VM、两张 ISO 和根盘。修正 Preseed：由安装器 early hook 暂时限制 APT 光驱自动扫描，late script 用完后移除该配置。没有手工完成安装来替代自动验收。修正后重新执行完整安装与产物启动检查，结果见下文。
+
+#### Q14 最终验收结果
+
+完整自动验收 **PASS，731.30 秒**，私有日志 `.acceptance/iso-cloud-final.log`：
+
+- 标准 Debian ISO URL 导入、独立 20 GiB 根盘、HTTP Preseed 与第二张 CD 的安装收尾脚本均被真实安装器使用；无 ZStack userdata/sshkey 注入，也未手工完成安装步骤。
+- 安装完成后 root 密码 SSH，检查安装/CD 使用标记和 ext4 根文件系统；插件关机、卸载安装盘/应答盘、设置 HardDisk 启动，重新连接并再次检查通过。
+- 真实 SSH 文件上传、内容读取/删除、root 身份和 x86_64 架构检查通过；关机、根盘模板创建、Ready 等待、Ceph 导出通过，无 cleanup warnings。
+- 输出模板另建新 VM，不加载安装介质、不配置 userdata，硬盘启动、安装标记、SSH 身份/架构和文件传输复验通过。导出 URL 删除前可读，Artifact Destroy 后 HTTP 404/410。
+- 按精确 UUID 复查本轮构建 VM、产物验证 VM、源 ISO、辅助 ISO、输出模板和安装根盘均不存在，匹配本轮名称的根盘库存为空。
+- 构建 VM `8367215d11484df0b0c2afa8d286b507`，根盘 `861ec70391af467f8296b05d23480e90`，输出模板 `620a53f8307b4d3bb6642b1255589266`，产物验证 VM `618108e0cf694f1bb4fdfc5dd138ceb4`，辅助盘 `4d65d0275f8542f997b23b0b1b027a07`。这些均为本轮临时资源，已清理。
+- 原始已有源镜像仍 Ready；Q12-E 保留镜像仍 Ready、复现 VM 仍 Stopped，未执行该现场的删除或 GC。
+
+本地 `make test plugin-check`、race/vet、生成 schema、格式和模块图检查通过；插件 describe 包含默认 builder 和 iso。配置/已有 ISO/架构校验、CD 最小尺寸与仅暴露单文件、硬盘启动前卸载顺序、错误短路与取消测试通过。凭证与安装密码 hash 扫描无匹配；私有配置/日志继续忽略。
+
+认证范围为 x86_64、BIOS、Debian 13.7、SSH、Ceph 这一组合。Windows ISO/Autounattend/WinRM、ARM ISO、UEFI、其他安装器及存储组合未做本轮真实认证；已有 Windows qcow2/ARM 基础验收不替代 ISO 安装验收。应答文件由用户维护，插件不解析操作系统专用语义。
+
+示例补充验证：本机 Packer 1.9.4 使用隔离的开发插件目录执行 `packer validate -var-file=<本机私有变量文件> examples/iso` 通过。示例固定 `1.0.1-dev`，避免已有较高版本旧插件遮蔽 ISO builder；`templatefile` 使用相对模板目录的文件名，修复旧版 Packer 重复拼接 `path.root` 的问题。

@@ -58,6 +58,12 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 	}
 
 	driver.secrets = append(driver.secrets, b.config.SourceImageUrl, b.config.UserData, encodeUserData(b.config.UserData), b.config.Comm.SSHPassword, b.config.Comm.WinRMPassword)
+	for _, content := range b.config.HTTPContent {
+		driver.secrets = append(driver.secrets, content)
+	}
+	for _, content := range b.config.CDContent {
+		driver.secrets = append(driver.secrets, content)
+	}
 	return b.runWithDriver(ctx, ui, hook, driver)
 }
 
@@ -118,7 +124,7 @@ func (b *Builder) runWithDriver(ctx context.Context, ui packersdk.Ui, hook packe
 	remainingSteps := []multistep.Step{}
 
 	// AC-005-06: Only generate SSH key for SSH communicator
-	if b.config.Comm.Type == "ssh" {
+	if b.config.Comm.Type == "ssh" && !b.config.ISOInstall {
 		remainingSteps = append(remainingSteps, &StepCreateSSHKey{
 			Password:     b.config.Comm.SSHPassword,
 			Debug:        b.config.PackerDebug,
@@ -126,23 +132,21 @@ func (b *Builder) runWithDriver(ctx context.Context, ui packersdk.Ui, hook packe
 		})
 	}
 
-	remainingSteps = append(remainingSteps,
-		&StepCreateVMInstance{},
-		&StepWaitForRunning{},
-		&StepAttachGuestTools{},
-		&communicator.StepConnect{
-			Config:    &b.config.Comm,
-			Host:      commHost(b.communicatorHost()),
-			SSHConfig: b.config.Comm.SSHConfigFunc(),
-		},
-		&commonsteps.StepProvision{},
-		&commonsteps.StepCleanupTempKeys{Comm: &b.config.Comm},
-		&StepStopVmInstance{},
-		&StepCreateImage{},
-		&StepWaitForImageReady{},
-		&StepExpungeVmInstance{},
-		&StepExportImage{},
-	)
+	newConnect := func() *communicator.StepConnect {
+		return &communicator.StepConnect{Config: &b.config.Comm, Host: commHost(b.communicatorHost()), SSHConfig: b.config.Comm.SSHConfigFunc()}
+	}
+	if b.config.ISOInstall {
+		remainingSteps = append(remainingSteps,
+			commonsteps.HTTPServerFromHTTPConfig(&b.config.HTTPConfig),
+			&commonsteps.StepCreateCD{Files: b.config.CDFiles, Content: b.config.CDContent, Label: b.config.CDLabel},
+			&StepAnswerISO{}, &StepCreateVMInstance{}, &StepISOBoot{}, &StepWaitForRunning{}, &StepISOBootCommand{},
+		)
+		firstConnect := newConnect()
+		remainingSteps = append(remainingSteps, firstConnect, &StepVerifyInstallation{}, &StepISOHardDiskBoot{Connect: firstConnect}, &StepWaitForRunning{}, newConnect(), &StepVerifyInstallation{}, &StepAttachGuestTools{})
+	} else {
+		remainingSteps = append(remainingSteps, &StepCreateVMInstance{}, &StepWaitForRunning{}, &StepAttachGuestTools{}, newConnect())
+	}
+	remainingSteps = append(remainingSteps, &commonsteps.StepProvision{}, &commonsteps.StepCleanupTempKeys{Comm: &b.config.Comm}, &StepStopVmInstance{}, &StepCreateImage{}, &StepWaitForImageReady{}, &StepExpungeVmInstance{}, &StepExportImage{})
 
 	steps = append(baseSteps, remainingSteps...)
 

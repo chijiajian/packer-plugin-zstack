@@ -1,0 +1,13 @@
+# ZStack ISO Builder
+
+Type: `zstack-iso`
+
+Installs an operating system from an ISO onto a blank root disk, provisions the installed guest and creates a ZStack root-volume template. Installation uses OS-specific answer files delivered over HTTP or a generated auxiliary CD; ZStack userdata is not used.
+
+See the [ISO configuration and lifecycle documentation](https://github.com/chijiajian/packer-plugin-zstack#installing-an-operating-system-from-iso) and [Debian example](https://github.com/chijiajian/packer-plugin-zstack/tree/main/examples/iso).
+
+Required additions to the regular ZStack configuration are `root_disk_offering_uuid`, an SSH/WinRM installation credential and `installation_check_command`. Sources may be an existing Enabled/Ready ISO (`image_uuid` or `source_image`) or `source_image_url` with `format = "iso"`.
+
+Optional installation settings are `http_directory`/`http_content`, `http_ip`, `cd_files`/`cd_content`/`cd_label`, and `boot_command`/`boot_wait`/`boot_key_interval`/`boot_keygroup_interval`. Boot commands require access to the host's TCP VNC console. Generated answer CDs require a local ISO creation tool and backup-storage access to the Packer runner's temporary HTTP publisher.
+
+The builder checks the installed OS, stops it, detaches installation media, selects hard-disk boot and reconnects/checks again before provisioning. It removes build-owned temporary resources on exit. Existing installer images are never deleted; `keep_source_image` can retain a URL-imported installer. Generated answer CDs are always cleaned up.
