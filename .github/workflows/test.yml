@@ -14,9 +14,10 @@ jobs:
         with:
           go-version-file: .go-version
       - run: make test plugin-check
-      - name: Check formatting, module graph and generated schema
+      - name: Check formatting, module graph, schema and web docs
         run: |
           test -z "$(gofmt -l builder version main.go)"
           go mod tidy
-          go generate ./...
-          git diff --exit-code -- go.mod go.sum builder/zstack/config.hcl2spec.go
+          bash .web-docs/scripts/test-compile-to-webdocs.sh
+          make generate
+          git diff --exit-code -- go.mod go.sum builder/zstack/config.hcl2spec.go .web-docs

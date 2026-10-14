@@ -4,6 +4,8 @@
 # SPDX-License-Identifier: MPL-2.0
 
 
+set -euo pipefail
+
 # Converts the folder name that the component documentation file
 # is stored in into the integration slug of the component.
 componentTypeFromFolderName() {
@@ -89,17 +91,15 @@ processComponentFile() {
     local webDocsFile="$webDocsFolder/README.md"
     local webDocsFileTmp="$webDocsFolder/README.md.tmp"
 
-    # Copy over the file to its webDocsFile location
-    cp "$componentFile" "$webDocsFile"
-
-    # Remove the Header
-    local lastMetadataLine="$(grep -n -m 2 '^\-\-\-' "$componentFile" | tail -n1 | cut -d':' -f1)"
-    cat "$webDocsFile" | tail -n +"$(($lastMetadataLine+2))"  > "$webDocsFileTmp"
-    mv "$webDocsFileTmp" "$webDocsFile"
-
-    # Remove the top H1, as this will be added automatically on the web
-    cat "$webDocsFile" | tail -n +3 > "$webDocsFileTmp"
-    mv "$webDocsFileTmp" "$webDocsFile"
+    # Frontmatter and a leading H1 are optional in source MDX. Remove only
+    # those structures; never discard a fixed number of content lines.
+    awk '
+      NR == 1 && $0 == "---" { metadata = 1; next }
+      metadata { if ($0 == "---") metadata = 0; next }
+      !body && /^[[:space:]]*$/ { next }
+      !body { body = 1; if ($0 ~ /^# /) next }
+      { print }
+    ' "$componentFile" > "$webDocsFile"
 
     # Rewrite Links
     rewriteLinks "$(cat "$webDocsFile")" "$4" > "$webDocsFileTmp"
@@ -122,11 +122,16 @@ compileWebDocs() {
   mkdir -p "$webDocsDir"
 
   # Copy the README over
-  cp "$docsDir/README.md" "$webDocsDir/README.md"
+  rewriteLinks "$(cat "$docsDir/README.md")" "$4" > "$webDocsDir/README.md"
 
-  # Process all MDX component files (exclude index files, which are unsupported)
-  for file in $(find "$docsDir" | grep "$docsDir/.*/.*\.mdx" | grep --invert-match "index.mdx"); do
-    processComponentFile "$docsDir" "$webDocsDir" "$file" "$4"
+  # Only public component directories are publishable. Local task records
+  # under docs/stories must never be converted to integration pages.
+  local folder file
+  for folder in builders provisioners post-processors datasources; do
+    [[ -d "$docsDir/$folder" ]] || continue
+    while IFS= read -r -d '' file; do
+      processComponentFile "$docsDir" "$webDocsDir" "$file" "$4"
+    done < <(find "$docsDir/$folder" -type f -name '*.mdx' ! -name 'index.mdx' -print0)
   done
 }
 
