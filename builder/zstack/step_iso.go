@@ -58,6 +58,7 @@ func (s *StepAnswerISO) Run(ctx context.Context, state multistep.StateBag) multi
 		return halt(state, err)
 	}
 	s.image = newResource()
+	state.Get("ui").(packersdk.Ui).Say("Tracking answer ISO resource UUID: " + s.image.UUID)
 	token := newResource().UUID
 	route := "/" + token + "/answer.iso"
 	mux := http.NewServeMux()

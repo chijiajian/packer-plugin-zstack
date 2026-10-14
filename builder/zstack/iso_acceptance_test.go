@@ -34,14 +34,17 @@ func TestAcceptanceISO(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, b.config.UserData)
 	require.Empty(t, b.config.SshKey)
-	require.Equal(t, "ssh", b.config.Comm.Type, "this acceptance scenario certifies Linux SSH")
+	require.Contains(t, []string{"ssh", "winrm"}, b.config.Comm.Type)
 	signalCtx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stopSignals()
 	ctx, cancel := context.WithTimeout(signalCtx, 50*time.Minute)
 	defer cancel()
 	ui := &packersdk.BasicUi{Reader: strings.NewReader(""), Writer: os.Stdout, ErrorWriter: os.Stderr}
-	hook := &isoAcceptanceHook{expectedUser: b.config.Comm.SSHUsername}
+	hook := &isoAcceptanceHook{config: &b.config, expectedUser: b.config.Comm.SSHUsername, expectedArch: b.config.Architecture, winrm: b.config.Comm.Type == "winrm", winrmUser: b.config.Comm.WinRMUser}
 	artifact, err := b.Run(ctx, ui, hook)
+	if b.config.RootVolumeUuid != "" {
+		t.Logf("ISO build root volume UUID: %s", b.config.RootVolumeUuid)
+	}
 	if artifact != nil {
 		t.Cleanup(func() { require.NoError(t, artifact.Destroy()) })
 		t.Logf("ISO output image UUID: %s", artifact.Id())
@@ -65,6 +68,7 @@ func TestAcceptanceISO(t *testing.T) {
 	clone.IP = ""
 	clone.InstanceName += "-artifact-check"
 	clone.ImageUuid = artifact.Id()
+	clone.BootMode = "" // Verify the output image carries the required firmware itself.
 	clone.Comm.SSHHost = ""
 	clone.Comm.WinRMHost = ""
 	state := new(multistep.BasicStateBag)
@@ -74,12 +78,13 @@ func TestAcceptanceISO(t *testing.T) {
 	t.Cleanup(func() { cleanupVM(state) })
 	require.Equal(t, multistep.ActionContinue, (&StepCreateVMInstance{}).Run(ctx, state))
 	t.Logf("artifact verification VM UUID: %s", clone.InstanceUuid)
+	t.Logf("artifact verification root volume UUID: %s", clone.RootVolumeUuid)
 	require.Equal(t, multistep.ActionContinue, (&StepWaitForRunning{}).Run(ctx, state))
 	connection := &communicator.StepConnect{Config: &clone.Comm, Host: commHost(clone.IP), SSHConfig: clone.Comm.SSHConfigFunc()}
 	require.Equal(t, multistep.ActionContinue, connection.Run(ctx, state))
 	defer connection.Cleanup(state)
 	require.Equal(t, multistep.ActionContinue, (&StepVerifyInstallation{}).Run(ctx, state))
-	require.NoError(t, (&isoAcceptanceHook{expectedUser: clone.Comm.SSHUsername}).Run(ctx, packersdk.HookProvision, ui, state.Get("communicator").(packersdk.Communicator), nil))
+	require.NoError(t, (&isoAcceptanceHook{config: &clone, expectedUser: clone.Comm.SSHUsername, expectedArch: clone.Architecture, winrm: clone.Comm.Type == "winrm", winrmUser: clone.Comm.WinRMUser}).Run(ctx, packersdk.HookProvision, ui, state.Get("communicator").(packersdk.Communicator), nil))
 	cleanupVM(state)
 	require.Empty(t, state.Get("cleanup_warnings"))
 	if source := raw["source_image"]; source != nil {
@@ -100,7 +105,11 @@ func TestAcceptanceISO(t *testing.T) {
 }
 
 type isoAcceptanceHook struct {
+	config       *Config
 	expectedUser string
+	expectedArch string
+	winrm        bool
+	winrmUser    string
 	called       bool
 }
 
@@ -109,6 +118,15 @@ func (h *isoAcceptanceHook) Run(ctx context.Context, name string, ui packersdk.U
 		return nil
 	}
 	h.called = true
+	if h.winrm {
+		return (&acceptanceHook{winrm: true, expectedUser: h.winrmUser}).Run(ctx, name, ui, comm, nil)
+	}
+	if h.expectedArch == "" && h.config != nil {
+		h.expectedArch = h.config.Architecture
+	}
+	if h.expectedArch == "" {
+		h.expectedArch = "x86_64"
+	}
 	path := "/tmp/packer-iso-" + newResource().UUID
 	if err := comm.Upload(path, strings.NewReader("iso-transfer-ok"), nil); err != nil {
 		return err
@@ -121,7 +139,7 @@ func (h *isoAcceptanceHook) Run(ctx context.Context, name string, ui packersdk.U
 	if cmd.ExitStatus() != 0 {
 		return fmt.Errorf("ISO guest command failed: %d", cmd.ExitStatus())
 	}
-	if strings.TrimSpace(output.String()) != h.expectedUser+"\nx86_64" {
+	if strings.TrimSpace(output.String()) != h.expectedUser+"\n"+h.expectedArch {
 		return fmt.Errorf("unexpected ISO guest identity/architecture")
 	}
 	return nil

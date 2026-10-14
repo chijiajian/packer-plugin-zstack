@@ -60,6 +60,9 @@ func (s *StepAddImage) Run(ctx context.Context, state multistep.StateBag) multis
 	if config.ISOInstall {
 		imageParam.Params.MediaType = strPtr("ISO")
 	}
+	if config.BootMode != "" {
+		imageParam.SystemTags = append(imageParam.SystemTags, "bootMode::"+config.BootMode)
+	}
 	r := resources(state)
 	r.ImportedImage = newResource()
 	imageParam.Params.ResourceUuid = &r.ImportedImage.UUID

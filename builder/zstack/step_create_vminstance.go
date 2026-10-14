@@ -32,6 +32,9 @@ func (s *StepCreateVMInstance) Run(ctx context.Context, state multistep.StateBag
 	ui.Say(fmt.Sprintf("Creating VM instance '%s'...", config.InstanceName))
 
 	var systemtags []string
+	if config.BootMode != "" {
+		systemtags = append(systemtags, "bootMode::"+config.BootMode)
+	}
 	cdroms := "cdroms::Empty::None::None"
 	if config.ISOInstall {
 		aux := "Empty"

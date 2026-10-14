@@ -39,16 +39,16 @@ Backup storage is required for image creation and export. In the normal VM build
 
 Use `image_description` to set a custom description for the generated image.
 
-The plugin also supports building an image directly from an existing **volume snapshot** by setting `source_volume_snapshot_uuid`. In this mode no VM is created and SSH/provisioners are skipped; the builder creates the image template from that existing snapshot — see [`example/from_snapshot.pkr.hcl`](example/from_snapshot.pkr.hcl).
+The plugin also supports building an image directly from an existing **volume snapshot** by setting `source_volume_snapshot_uuid`. In this mode no VM is created and SSH/provisioners are skipped; the builder creates the image template from that existing snapshot — see [`examples/from_snapshot.pkr.hcl`](examples/from_snapshot.pkr.hcl).
 
-See the [`example/`](example) directory for ready-to-run HCL examples covering account/password auth, AK/SK auth, and UUID passthrough.
+See the [`examples/`](examples) directory for ready-to-run HCL examples covering account/password auth, AK/SK auth, and UUID passthrough.
 
 ## E2E Test Method
 
-Use the local E2E template and shell script to verify the full build flow (image import, VM create, SSH provision, VM stop, image create from root volume):
+Use the basic template to verify VM creation, SSH provisioning and image creation from the root volume. The optional shell script checks the guest environment; the configuration below also demonstrates URL-based image import:
 
-- Template: [`example/local-dev.pkr.hcl`](example/local-dev.pkr.hcl)
-- Provisioner script: [`example/load_images.sh`](example/load_images.sh)
+- Template: [`examples/basic.pkr.hcl`](examples/basic.pkr.hcl)
+- Provisioner script: [`examples/load_images.sh`](examples/load_images.sh)
 
 ### Recommended Test Config
 
@@ -80,7 +80,7 @@ build {
   sources = ["source.zstack.e2e-test"]
 
   provisioner "shell" {
-    script = "example/load_images.sh"
+    script = "examples/load_images.sh"
   }
 }
 ```
@@ -88,8 +88,8 @@ build {
 ### Run
 
 ```bash
-PACKER_PLUGIN_PATH=$(pwd) packer validate example/local-dev.pkr.hcl
-PACKER_PLUGIN_PATH=$(pwd) packer build example/local-dev.pkr.hcl
+PACKER_PLUGIN_PATH=$(pwd) packer validate examples/basic.pkr.hcl
+PACKER_PLUGIN_PATH=$(pwd) packer build examples/basic.pkr.hcl
 ```
 
 ### Backup Storage / Export Behavior
@@ -115,7 +115,7 @@ documentation located in the [`docs/`](docs) directory.
 
 ## Quality fixes and upgrade (2026-10)
 
-This development version uses **Go 1.26.9**, **ZStack SDK v0.0.10**, and **Packer Plugin SDK v0.6.12**. See the [task and acceptance record](docs/stories/STORY-PKR-QUALITY-20261013.md). The `go-cty` replacement remains necessary for the SDK's HCL generator.
+This development version uses **Go 1.26.9**, **ZStack SDK v0.0.10**, and **Packer Plugin SDK v0.6.12**. The `go-cty` replacement remains necessary for the SDK's HCL generator.
 
 Environment variables are defaults; explicit configuration wins. Use one authentication method. Copy `.env.example` to `.env`, restrict it with `chmod 600 .env`, and load it with `set -a; source .env; set +a`. Packer does not load dotenv files itself. `.env` and `.acceptance/` are ignored by Git.
 
@@ -161,4 +161,4 @@ The installer must configure the SSH/WinRM account and credential. ISO mode defa
 - Required `installation_check_command` must return zero only in the installed OS. After the first successful connection/check, the builder stops the VM, detaches both installer and answer ISOs, selects hard-disk boot, starts it and reconnects/checks again before running provisioners. An installer SSH shell or VM `Running` status alone is insufficient.
 - The answer-file syntax and boot keys are OS/installer specific. The plugin transports files without interpreting Kickstart, Preseed, Autoinstall or Autounattend semantics. Install cloud-init and Guest Tools inside the target OS only if desired for later template instances.
 
-See [the Debian ISO example](examples/iso/debian.pkr.hcl). It uses HTTP Preseed plus an auxiliary CD containing the installation completion script. Match `/dev/vda`, `/dev/sr1`, BIOS/UEFI boot commands, mirrors and filesystem checks to your installer. Protect answer files and variable files containing credentials, exclude them from Git, and do not enable installation debug logging in shared logs. The example retains an installation credential for Packer; remove/rotate it in a final provisioner according to your image policy. Windows ISO/WinRM and ARM ISO installations require their own answer files and acceptance runs.
+See [the Debian ISO example](examples/iso/debian.pkr.hcl). It uses HTTP Preseed plus an auxiliary CD containing the installation completion script. Match `/dev/vda`, `/dev/sr1`, BIOS/UEFI boot commands, mirrors and filesystem checks to your installer. Protect answer files and variable files containing credentials, exclude them from Git, and do not enable installation debug logging in shared logs. The example retains an installation credential for Packer; remove/rotate it in a final provisioner according to your image policy. See [the ISO examples](examples/iso/README.md) for Ubuntu, Rocky ARM and Windows unattended installation templates.

@@ -227,11 +227,11 @@ StepPreValidate → StepCreateImageFromSnapshot → StepWaitForImageReady → St
 
 ## E2E 测试
 
-参考 [`example/local-dev.pkr.hcl`](example/local-dev.pkr.hcl) 与 [`example/load_images.sh`](example/load_images.sh)。
+参考 [`examples/basic.pkr.hcl`](examples/basic.pkr.hcl) 与 [`examples/load_images.sh`](examples/load_images.sh)。
 
 ```bash
-PACKER_PLUGIN_PATH=$(pwd) packer validate example/local-dev.pkr.hcl
-PACKER_PLUGIN_PATH=$(pwd) packer build    example/local-dev.pkr.hcl
+PACKER_PLUGIN_PATH=$(pwd) packer validate examples/basic.pkr.hcl
+PACKER_PLUGIN_PATH=$(pwd) packer build    examples/basic.pkr.hcl
 ```
 
 > **建议**：`source_image_url` 模式下，备份存储优先用 `backup_storage_name`，插件会自动解析为 UUID，免去记忆 UUID。
@@ -249,7 +249,7 @@ PACKER_PLUGIN_PATH=$(pwd) packer build    example/local-dev.pkr.hcl
 
 ## 质量修复与升级（2026-10）
 
-本次开发版本使用 Go **1.26.9**、ZStack SDK **v0.0.10**、Packer Plugin SDK **v0.6.12**。任务与验收状态见 [质量任务文档](docs/stories/STORY-PKR-QUALITY-20261013.md)。`go-cty` 替换保留，以兼容 Packer SDK 的 HCL 生成工具。
+本次开发版本使用 Go **1.26.9**、ZStack SDK **v0.0.10**、Packer Plugin SDK **v0.6.12**。`go-cty` 替换保留，以兼容 Packer SDK 的 HCL 生成工具。
 
 - 环境变量仅作为默认值，显式 HCL 配置优先；两种认证方式不可混用。将凭证存入本机 `.env`（权限 `0600`），再执行 `set -a; source .env; set +a`。`.env` 与 `.acceptance/` 均被 Git 忽略；请勿使用 `git add -f` 添加凭证。
 - 必须指定目标镜像名、备份存储，以及有效的镜像或根盘快照来源。VM 路径还需要实例名、网络和实例规格（或正数 CPU/内存）。名称查询匹配多个资源时必须改用 UUID。

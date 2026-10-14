@@ -24,6 +24,14 @@ import (
 	"github.com/zstackio/zstack-sdk-go-v2/pkg/view"
 )
 
+type apiError struct {
+	Code       string   `json:"code"`
+	FormatArgs []string `json:"formatArgs"`
+	raw        string
+}
+
+func (e *apiError) Error() string { return "ZStack API: " + e.raw }
+
 // SDK v0.0.10's httputils.requestInternal ignores its context argument.
 // Keep SDK wire models and date decoding, but own the small HTTP boundary so
 // cancellation, bounded polling and request-log redaction are enforceable.
@@ -112,7 +120,11 @@ func (a *apiClient) do(ctx context.Context, method, resource string, values url.
 			return nil, fmt.Errorf("ZStack returned invalid JSON (HTTP %d)", resp.StatusCode)
 		}
 		if e, err := data.Get("error"); err == nil && e.String() != "null" {
-			return nil, fmt.Errorf("ZStack API: %s", e.String())
+			apiErr := &apiError{raw: e.String()}
+			if err := json.Unmarshal([]byte(e.String()), apiErr); err != nil {
+				return nil, fmt.Errorf("ZStack API: %s", e.String())
+			}
+			return nil, apiErr
 		}
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			return nil, fmt.Errorf("ZStack HTTP %d: %s", resp.StatusCode, data.String())

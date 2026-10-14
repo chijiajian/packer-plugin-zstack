@@ -34,7 +34,7 @@ func TestISOBuilderValidation(t *testing.T) {
 	require.Equal(t, 30*time.Minute, b.config.Comm.SSHTimeout)
 	require.Contains(t, b.config.FlatBootCommand(), "{{ .HTTPIP }}")
 	for _, change := range []map[string]any{
-		{"http_ip": "0.0.0.0"}, {"userdata": "#cloud-config"}, {"sshkey": "public-key"}, {"communicator": "none"}, {"root_disk_offering_uuid": ""},
+		{"boot_mode": "BIOS"}, {"http_ip": "0.0.0.0"}, {"userdata": "#cloud-config"}, {"sshkey": "public-key"}, {"communicator": "none"}, {"root_disk_offering_uuid": ""},
 		{"installation_check_command": ""}, {"ssh_password": ""}, {"http_directory": "/missing", "http_content": map[string]string{"/file": "value"}},
 	} {
 		raw := isoRaw()
@@ -54,15 +54,17 @@ func TestISOBuilderValidation(t *testing.T) {
 	require.Equal(t, "iso", b.config.Format)
 }
 func TestISOImportsMediaTypeAndNoMetadata(t *testing.T) {
-	c := &Config{ISOConfig: ISOConfig{ISOInstall: true}, ImageConfig: ImageConfig{ImageUuid: "boot", SourceImage: "installer", SourceImageUrl: "http://example.test/install.iso", Format: "iso"}, InstanceConfig: InstanceConfig{RootDiskOfferingUuid: "disk", SshKey: "must-not-inject", UserData: "must-not-inject"}}
+	c := &Config{ISOConfig: ISOConfig{ISOInstall: true, BootMode: "UEFI"}, ImageConfig: ImageConfig{ImageUuid: "boot", SourceImage: "installer", SourceImageUrl: "http://example.test/install.iso", Format: "iso"}, InstanceConfig: InstanceConfig{RootDiskOfferingUuid: "disk", SshKey: "must-not-inject", UserData: "must-not-inject"}}
 	c.Comm.SSHHost = "127.0.0.1"
 	d := &MockDriver{AddImageResult: &view.ImageInventoryView{BaseInfoView: view.BaseInfoView{UUID: "boot"}}, CreateVmInstanceResult: &view.VmInstanceInventoryView{BaseInfoView: view.BaseInfoView{UUID: "vm"}}}
 	state := testStateBag(c, d)
 	state.Put("answer_iso_uuid", "answer")
 	require.Equal(t, multistep.ActionContinue, (&StepAddImage{}).Run(context.Background(), state))
 	require.Equal(t, "ISO", *d.AddImageParam.Params.MediaType)
+	require.Contains(t, d.AddImageParam.SystemTags, "bootMode::UEFI")
 	require.Equal(t, multistep.ActionContinue, (&StepCreateVMInstance{}).Run(context.Background(), state))
 	require.Contains(t, d.CreateVmInstanceParam.SystemTags, "cdroms::boot::answer::None")
+	require.Contains(t, d.CreateVmInstanceParam.SystemTags, "bootMode::UEFI")
 	require.Equal(t, "CreateStopped", *d.CreateVmInstanceParam.Params.Strategy)
 	for _, tag := range d.CreateVmInstanceParam.SystemTags {
 		require.False(t, strings.HasPrefix(tag, "userdata::") || strings.HasPrefix(tag, "sshkey::"))

@@ -14,6 +14,7 @@ import (
 )
 
 type ISOConfig struct {
+	BootMode                 string        `mapstructure:"boot_mode"`
 	BootKeyInterval          time.Duration `mapstructure:"boot_key_interval"`
 	ISOInstall               bool          `mapstructure:"iso_install"`
 	bootcommand.BootConfig   `mapstructure:",squash"`
@@ -34,6 +35,9 @@ func (b *ISOBuilder) Prepare(raws ...any) ([]string, []string, error) {
 func (c *Config) prepareISO() []error {
 	var errs []error
 	add := func(s string) { errs = append(errs, fmt.Errorf("ISO build: %s", s)) }
+	if c.BootMode != "" && c.BootMode != "Legacy" && c.BootMode != "UEFI" {
+		add("boot_mode must be Legacy or UEFI")
+	}
 	if !c.ISOInstall {
 		if strings.EqualFold(c.Format, "iso") {
 			add("format = iso requires iso_install or zstack-iso")
