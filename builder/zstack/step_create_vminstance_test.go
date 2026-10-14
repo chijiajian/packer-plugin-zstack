@@ -30,6 +30,9 @@ func TestStepCreateVMInstance_Run(t *testing.T) {
 			VmNics:         []view.VmNicInventoryView{{Ip: "192.168.0.10"}},
 		}}
 		state := testStateBag(config, driver)
+		if config.InstanceUuid != "" {
+			resources(state).VM = ownedResource{UUID: config.InstanceUuid, Created: true}
+		}
 
 		action := (&StepCreateVMInstance{}).Run(context.Background(), state)
 
@@ -56,6 +59,9 @@ func TestStepCreateVMInstance_Run(t *testing.T) {
 			VmNics:         []view.VmNicInventoryView{{Ip: "192.168.0.10"}},
 		}}
 		state := testStateBag(config, driver)
+		if config.InstanceUuid != "" {
+			resources(state).VM = ownedResource{UUID: config.InstanceUuid, Created: true}
+		}
 
 		action := (&StepCreateVMInstance{}).Run(context.Background(), state)
 
@@ -85,6 +91,9 @@ func TestStepCreateVMInstance_Run(t *testing.T) {
 			VmNics:         []view.VmNicInventoryView{{Ip: "192.168.0.10"}},
 		}}
 		state := testStateBag(config, driver)
+		if config.InstanceUuid != "" {
+			resources(state).VM = ownedResource{UUID: config.InstanceUuid, Created: true}
+		}
 
 		action := (&StepCreateVMInstance{}).Run(context.Background(), state)
 
@@ -104,6 +113,9 @@ func TestStepCreateVMInstance_Run(t *testing.T) {
 		}
 		driver := &MockDriver{CreateVmInstanceErr: expectedErr}
 		state := testStateBag(config, driver)
+		if config.InstanceUuid != "" {
+			resources(state).VM = ownedResource{UUID: config.InstanceUuid, Created: true}
+		}
 
 		action := (&StepCreateVMInstance{}).Run(context.Background(), state)
 
@@ -119,6 +131,9 @@ func TestStepCreateVMInstance_Cleanup(t *testing.T) {
 		config := &Config{InstanceConfig: InstanceConfig{InstanceUuid: "vm-1"}}
 		driver := &MockDriver{}
 		state := testStateBag(config, driver)
+		if config.InstanceUuid != "" {
+			resources(state).VM = ownedResource{UUID: config.InstanceUuid, Created: true}
+		}
 		state.Put("error", errors.New("build failed"))
 
 		(&StepCreateVMInstance{}).Cleanup(state)
@@ -129,10 +144,13 @@ func TestStepCreateVMInstance_Cleanup(t *testing.T) {
 		assert.Equal(t, "vm-1", driver.DeleteVmInstanceUuid)
 	})
 
-	t.Run("CleanupSkippedOnSuccess", func(t *testing.T) {
+	t.Run("CleanupSkippedAfterExpunge", func(t *testing.T) {
 		config := &Config{InstanceConfig: InstanceConfig{InstanceUuid: "vm-1"}}
 		driver := &MockDriver{}
 		state := testStateBag(config, driver)
+		if config.InstanceUuid != "" {
+			resources(state).VM = ownedResource{UUID: config.InstanceUuid, Created: true, Removed: true}
+		}
 
 		(&StepCreateVMInstance{}).Cleanup(state)
 
@@ -144,6 +162,9 @@ func TestStepCreateVMInstance_Cleanup(t *testing.T) {
 		config := &Config{}
 		driver := &MockDriver{}
 		state := testStateBag(config, driver)
+		if config.InstanceUuid != "" {
+			resources(state).VM = ownedResource{UUID: config.InstanceUuid, Created: true}
+		}
 		state.Put("error", errors.New("build failed"))
 
 		(&StepCreateVMInstance{}).Cleanup(state)
@@ -156,6 +177,9 @@ func TestStepCreateVMInstance_Cleanup(t *testing.T) {
 		config := &Config{InstanceConfig: InstanceConfig{InstanceUuid: "vm-1"}}
 		driver := &MockDriver{DestroyVmInstanceErr: errors.New("destroy failed")}
 		state := testStateBag(config, driver)
+		if config.InstanceUuid != "" {
+			resources(state).VM = ownedResource{UUID: config.InstanceUuid, Created: true}
+		}
 		state.Put("error", errors.New("build failed"))
 
 		(&StepCreateVMInstance{}).Cleanup(state)
@@ -179,6 +203,9 @@ func TestStepCreateVMInstance_NoNIC_Halts(t *testing.T) {
 		VmNics:       nil,
 	}}
 	state := testStateBag(config, driver)
+	if config.InstanceUuid != "" {
+		resources(state).VM = ownedResource{UUID: config.InstanceUuid, Created: true}
+	}
 
 	action := (&StepCreateVMInstance{}).Run(context.Background(), state)
 
@@ -200,6 +227,9 @@ func TestStepCreateVMInstance_CleanTrafficTag(t *testing.T) {
 			VmNics:       []view.VmNicInventoryView{{Ip: "192.168.0.10"}},
 		}}
 		state := testStateBag(config, driver)
+		if config.InstanceUuid != "" {
+			resources(state).VM = ownedResource{UUID: config.InstanceUuid, Created: true}
+		}
 
 		(&StepCreateVMInstance{}).Run(context.Background(), state)
 		assert.Contains(t, driver.CreateVmInstanceParam.BaseParam.SystemTags, "cleanTraffic::false")
@@ -216,6 +246,9 @@ func TestStepCreateVMInstance_CleanTrafficTag(t *testing.T) {
 			VmNics:       []view.VmNicInventoryView{{Ip: "192.168.0.10"}},
 		}}
 		state := testStateBag(config, driver)
+		if config.InstanceUuid != "" {
+			resources(state).VM = ownedResource{UUID: config.InstanceUuid, Created: true}
+		}
 
 		(&StepCreateVMInstance{}).Run(context.Background(), state)
 		assert.Contains(t, driver.CreateVmInstanceParam.BaseParam.SystemTags, "cleanTraffic::true")

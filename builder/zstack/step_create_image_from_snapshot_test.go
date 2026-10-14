@@ -27,7 +27,7 @@ func TestStepCreateImageFromSnapshot_Run(t *testing.T) {
 			BackupStorageConfig: BackupStorageConfig{BackupStorageUuid: "bs-1"},
 		}
 		driver := &MockDriver{
-			GetVolumeSnapshotResult:       &view.VolumeSnapshotInventoryView{BaseInfoView: view.BaseInfoView{UUID: "snap-uuid-1"}, Status: "Ready", State: "Enabled"},
+			GetVolumeSnapshotResult:       &view.VolumeSnapshotInventoryView{BaseInfoView: view.BaseInfoView{UUID: "snap-uuid-1"}, Status: "Ready", State: "Enabled", VolumeType: "Root"},
 			CreateImageFromSnapshotResult: &view.ImageInventoryView{BaseInfoView: view.BaseInfoView{UUID: "img-uuid-1"}},
 		}
 		state := testStateBag(config, driver)
@@ -112,7 +112,7 @@ func TestStepCreateImageFromSnapshot_Run(t *testing.T) {
 			BackupStorageConfig: BackupStorageConfig{BackupStorageUuid: "bs-1"},
 		}
 		driver := &MockDriver{
-			GetVolumeSnapshotResult:    &view.VolumeSnapshotInventoryView{BaseInfoView: view.BaseInfoView{UUID: "snap-1"}, Status: "Ready"},
+			GetVolumeSnapshotResult:    &view.VolumeSnapshotInventoryView{BaseInfoView: view.BaseInfoView{UUID: "snap-1"}, Status: "Ready", State: "Enabled", VolumeType: "Root"},
 			CreateImageFromSnapshotErr: expectedErr,
 		}
 		state := testStateBag(config, driver)
@@ -131,7 +131,7 @@ func TestStepCreateImageFromSnapshot_Run(t *testing.T) {
 			BackupStorageConfig: BackupStorageConfig{BackupStorageUuid: "bs-1"},
 		}
 		driver := &MockDriver{
-			GetVolumeSnapshotResult:       &view.VolumeSnapshotInventoryView{BaseInfoView: view.BaseInfoView{UUID: "snap-1"}, Status: "Ready"},
+			GetVolumeSnapshotResult:       &view.VolumeSnapshotInventoryView{BaseInfoView: view.BaseInfoView{UUID: "snap-1"}, Status: "Ready", State: "Enabled", VolumeType: "Root"},
 			CreateImageFromSnapshotResult: &view.ImageInventoryView{BaseInfoView: view.BaseInfoView{UUID: "img-uuid-1"}},
 		}
 		state := testStateBag(config, driver)

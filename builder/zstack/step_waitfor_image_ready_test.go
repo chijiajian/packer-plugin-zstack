@@ -71,6 +71,7 @@ func TestStepWaitForImageReady_Run(t *testing.T) {
 
 		action := (&StepWaitForImageReady{}).Run(ctx, state)
 		assert.Equal(t, multistep.ActionHalt, action)
+		assert.ErrorIs(t, state.Get("error").(error), context.Canceled)
 	})
 
 	t.Run("TimeoutHalts", func(t *testing.T) {
@@ -87,6 +88,7 @@ func TestStepWaitForImageReady_Run(t *testing.T) {
 		errVal, ok := state.GetOk("error")
 		assert.True(t, ok)
 		assert.Contains(t, errVal.(error).Error(), "timeout")
+		assert.ErrorIs(t, errVal.(error), context.DeadlineExceeded)
 	})
 }
 

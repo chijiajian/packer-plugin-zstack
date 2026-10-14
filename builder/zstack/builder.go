@@ -52,16 +52,22 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 	b.ui = ui
 	log.Printf("[DEBUG] Starting build with %s", b.config.RedactedSummary())
 
-	driver, err := b.config.AccessConfig.Driver(b.config.PackerDebug)
+	driver, err := b.config.AccessConfig.driver(ctx, b.config.APITimeout())
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize ZStack Driver: %v", err)
 	}
 
+	driver.secrets = append(driver.secrets, b.config.SourceImageUrl, b.config.UserData, encodeUserData(b.config.UserData), b.config.Comm.SSHPassword, b.config.Comm.WinRMPassword)
+	return b.runWithDriver(ctx, ui, hook, driver)
+}
+
+func (b *Builder) runWithDriver(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook, driver Driver) (packersdk.Artifact, error) {
 	state := new(multistep.BasicStateBag)
 	state.Put("ui", ui)
 	state.Put("driver", driver)
 	state.Put("config", &b.config)
 	state.Put("hook", hook)
+	state.Put("communicator_config", &b.config.Comm)
 
 	var steps []multistep.Step
 
@@ -79,6 +85,9 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 		b.runner = commonsteps.NewRunner(steps, b.config.PackerConfig, ui)
 		b.runner.Run(ctx, state)
 
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		return b.collectArtifact(state, driver)
 	}
 
@@ -123,12 +132,14 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 		&StepAttachGuestTools{},
 		&communicator.StepConnect{
 			Config:    &b.config.Comm,
-			Host:      commHost(b.config.Comm.SSHHost),
+			Host:      commHost(b.communicatorHost()),
 			SSHConfig: b.config.Comm.SSHConfigFunc(),
 		},
 		&commonsteps.StepProvision{},
+		&commonsteps.StepCleanupTempKeys{Comm: &b.config.Comm},
 		&StepStopVmInstance{},
 		&StepCreateImage{},
+		&StepWaitForImageReady{},
 		&StepExpungeVmInstance{},
 		&StepExportImage{},
 	)
@@ -140,42 +151,37 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 	b.runner = commonsteps.NewRunner(steps, b.config.PackerConfig, ui)
 	b.runner.Run(ctx, state)
 
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 	return b.collectArtifact(state, driver)
 }
 
 func (b *Builder) collectArtifact(state multistep.StateBag, driver Driver) (packersdk.Artifact, error) {
-	var urls []string
-	if v, ok := state.GetOk("image_url"); ok {
-		switch val := v.(type) {
-		case string:
-			if val != "" {
-				urls = []string{val}
-			}
-		case []string:
-			urls = val
-		case []any:
-			for _, item := range val {
-				if s, ok := item.(string); ok {
-					urls = append(urls, s)
-				}
-			}
-		default:
-			log.Printf("[WARN] unexpected type for image_url in state: %T", v)
-		}
-	}
-
 	if rawErr, ok := state.GetOk("error"); ok {
 		if err, ok := rawErr.(error); ok {
 			return nil, err
 		}
 		return nil, fmt.Errorf("unexpected error type in state: %T", rawErr)
 	}
-
-	artifact := &Artifact{
-		config:    b.config,
-		exportUrl: urls,
-		driver:    driver,
+	if _, ok := state.GetOk(multistep.StateCancelled); ok {
+		return nil, context.Canceled
 	}
+	if _, ok := state.GetOk(multistep.StateHalted); ok {
+		return nil, fmt.Errorf("build halted before completion")
+	}
+	r := resources(state)
+	if !r.Image.Created || !r.ImageReady || r.Image.Removed || r.Image.UUID == "" {
+		return nil, fmt.Errorf("build did not produce a ready target image")
+	}
+	// Artifact carries output metadata, never source-image identifiers or secrets.
+	artifact := &Artifact{config: Config{
+		ImageConfig:         ImageConfig{ImageUuid: r.Image.UUID},
+		ExportImageResult:   ExportImageResult{ImageUrl: b.config.ImageUrl},
+		BackupStorageConfig: b.config.BackupStorageConfig,
+		cleanupTimeout:      b.config.CleanupTimeout(),
+	}, driver: driver, owned: true}
+	artifact.warnings, _ = state.Get("cleanup_warnings").([]string)
 	return artifact, nil
 }
 
@@ -194,4 +200,11 @@ func commHost(host string) func(multistep.StateBag) (string, error) {
 
 		return ip, nil
 	}
+}
+
+func (b *Builder) communicatorHost() string {
+	if b.config.Comm.Type == "winrm" {
+		return b.config.Comm.WinRMHost
+	}
+	return b.config.Comm.SSHHost
 }

@@ -28,14 +28,14 @@ func (s *StepSourceImageValidate) Run(ctx context.Context, state multistep.State
 		return multistep.ActionContinue
 	}
 
-	images, err := validateImage(state)
+	images, err := validateImage(ctx, state)
 	if err != nil {
+		state.Put("error", err)
 		ui.Errorf("Image validation failed: %s", err)
 		return multistep.ActionHalt
 	}
 	if images[0].Status != "Ready" || images[0].State != "Enabled" {
-		ui.Errorf("Image '%s' is not ready (status=%s, state=%s)", config.SourceImage, images[0].Status, images[0].State)
-		return multistep.ActionHalt
+		return halt(state, fmt.Errorf("image %q is not ready (status=%s, state=%s)", config.SourceImage, images[0].Status, images[0].State))
 	}
 
 	config.ImageConfig.ImageUuid = images[0].UUID
@@ -43,9 +43,9 @@ func (s *StepSourceImageValidate) Run(ctx context.Context, state multistep.State
 	return multistep.ActionContinue
 }
 
-func validateImage(state multistep.StateBag) ([]view.ImageInventoryView, error) {
+func validateImage(ctx context.Context, state multistep.StateBag) ([]view.ImageInventoryView, error) {
 	config := state.Get("config").(*Config)
-	driver := state.Get("driver").(Driver)
+	driver := stepDriver(ctx, state)
 
 	images, err := driver.QueryImage(config.SourceImage)
 	if err != nil {
@@ -53,6 +53,9 @@ func validateImage(state multistep.StateBag) ([]view.ImageInventoryView, error) 
 	}
 	if len(images) == 0 {
 		return nil, fmt.Errorf("image '%s' not found", config.SourceImage)
+	}
+	if len(images) > 1 {
+		return nil, fmt.Errorf("multiple image resources match the name; specify UUID")
 	}
 	return images, nil
 }

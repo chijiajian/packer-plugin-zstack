@@ -21,8 +21,9 @@ func TestArtifact_Files(t *testing.T) {
 		assert.Equal(t, []string{}, a.Files())
 	})
 	t.Run("ReturnsExportUrls", func(t *testing.T) {
-		a := &Artifact{exportUrl: []string{"http://x/a.qcow2", "http://x/b.qcow2"}}
-		assert.Equal(t, []string{"http://x/a.qcow2", "http://x/b.qcow2"}, a.Files())
+		a := &Artifact{config: Config{ExportImageResult: ExportImageResult{ImageUrl: "http://x/a.qcow2"}}}
+		assert.Empty(t, a.Files())
+		assert.Equal(t, "http://x/a.qcow2", a.State("image_url"))
 	})
 }
 
@@ -33,7 +34,7 @@ func TestArtifact_Id(t *testing.T) {
 
 func TestArtifact_String(t *testing.T) {
 	a := &Artifact{config: Config{ExportImageResult: ExportImageResult{ImageUrl: "http://x/a.qcow2"}}}
-	assert.Equal(t, "http://x/a.qcow2", a.String())
+	assert.Equal(t, "ZStack image: ", a.String())
 }
 
 func TestArtifact_State(t *testing.T) {
@@ -55,7 +56,7 @@ func TestArtifact_Destroy(t *testing.T) {
 	t.Run("SuccessDeletesAndExpunges", func(t *testing.T) {
 		driver := &MockDriver{}
 		a := &Artifact{
-			driver: driver,
+			driver: driver, owned: true,
 			config: Config{ImageConfig: ImageConfig{ImageUuid: "img-uuid"}},
 		}
 		assert.NoError(t, a.Destroy())
@@ -67,7 +68,7 @@ func TestArtifact_Destroy(t *testing.T) {
 	t.Run("DeleteImageErrorStopsBeforeExpunge", func(t *testing.T) {
 		driver := &MockDriver{DeleteImageErr: errors.New("delete boom")}
 		a := &Artifact{
-			driver: driver,
+			driver: driver, owned: true,
 			config: Config{ImageConfig: ImageConfig{ImageUuid: "img-uuid"}},
 		}
 		err := a.Destroy()
@@ -79,7 +80,7 @@ func TestArtifact_Destroy(t *testing.T) {
 	t.Run("ExpungeImageErrorReturned", func(t *testing.T) {
 		driver := &MockDriver{ExpungeImageErr: errors.New("expunge boom")}
 		a := &Artifact{
-			driver: driver,
+			driver: driver, owned: true,
 			config: Config{ImageConfig: ImageConfig{ImageUuid: "img-uuid"}},
 		}
 		err := a.Destroy()

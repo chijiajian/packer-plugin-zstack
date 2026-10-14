@@ -25,12 +25,15 @@ func (s *StepPreValidate) Run(ctx context.Context, state multistep.StateBag) mul
 
 	if snapshotOnly {
 		log.Printf("[INFO] Snapshot-only build: skipping L3 network validation")
+	} else if len(config.L3NetworkUuids) > 0 {
+		config.L3NetworkUuid = config.L3NetworkUuids[0]
 	} else if config.NetworkConfig.L3NetworkUuid != "" {
 		log.Printf("[INFO] Using provided network UUID: %s", config.NetworkConfig.L3NetworkUuid)
 		ui.Say(fmt.Sprintf("Using provided network UUID: %s", config.NetworkConfig.L3NetworkUuid))
 	} else {
-		networks, err := validateNetwork(state)
+		networks, err := validateNetwork(ctx, state)
 		if err != nil {
+			state.Put("error", err)
 			ui.Errorf("Network validation failed: %s", err)
 			return multistep.ActionHalt
 		}
@@ -40,6 +43,7 @@ func (s *StepPreValidate) Run(ctx context.Context, state multistep.StateBag) mul
 
 	if config.BackupStorageConfig.BackupStorageUuid == "" && config.BackupStorageConfig.BackupStorageName == "" {
 		err := fmt.Errorf("backup_storage_name or backup_storage_uuid is required")
+		state.Put("error", err)
 		ui.Errorf("Backup storage validation failed: %s", err)
 		return multistep.ActionHalt
 	}
@@ -49,8 +53,9 @@ func (s *StepPreValidate) Run(ctx context.Context, state multistep.StateBag) mul
 		log.Printf("[INFO] Using provided backup storage UUID: %s", config.BackupStorageConfig.BackupStorageUuid)
 		ui.Say(fmt.Sprintf("Using provided backup storage UUID: %s", config.BackupStorageConfig.BackupStorageUuid))
 	} else if config.BackupStorageConfig.BackupStorageName != "" {
-		backupStorages, err := validateBackupStorage(state)
+		backupStorages, err := validateBackupStorage(ctx, state)
 		if err != nil {
+			state.Put("error", err)
 			ui.Errorf("Backup storage validation failed: %s", err)
 			return multistep.ActionHalt
 		}
@@ -61,9 +66,9 @@ func (s *StepPreValidate) Run(ctx context.Context, state multistep.StateBag) mul
 	return multistep.ActionContinue
 }
 
-func validateNetwork(state multistep.StateBag) ([]view.L3NetworkInventoryView, error) {
+func validateNetwork(ctx context.Context, state multistep.StateBag) ([]view.L3NetworkInventoryView, error) {
 	config := state.Get("config").(*Config)
-	driver := state.Get("driver").(Driver)
+	driver := stepDriver(ctx, state)
 
 	networks, err := driver.QueryL3Network(config.L3NetworkName)
 	if err != nil {
@@ -72,12 +77,15 @@ func validateNetwork(state multistep.StateBag) ([]view.L3NetworkInventoryView, e
 	if len(networks) == 0 {
 		return nil, fmt.Errorf("network '%s' not found", config.L3NetworkName)
 	}
+	if len(networks) > 1 {
+		return nil, fmt.Errorf("multiple network resources match the name; specify UUID")
+	}
 	return networks, nil
 }
 
-func validateBackupStorage(state multistep.StateBag) ([]view.BackupStorageInventoryView, error) {
+func validateBackupStorage(ctx context.Context, state multistep.StateBag) ([]view.BackupStorageInventoryView, error) {
 	config := state.Get("config").(*Config)
-	driver := state.Get("driver").(Driver)
+	driver := stepDriver(ctx, state)
 
 	backupStorage, err := driver.QueryBackStorage(config.BackupStorageName)
 	if err != nil {
@@ -85,6 +93,9 @@ func validateBackupStorage(state multistep.StateBag) ([]view.BackupStorageInvent
 	}
 	if len(backupStorage) == 0 {
 		return nil, fmt.Errorf("backup storage '%s' not found", config.BackupStorageName)
+	}
+	if len(backupStorage) > 1 {
+		return nil, fmt.Errorf("multiple backup storage resources match the name; specify UUID")
 	}
 	return backupStorage, nil
 }

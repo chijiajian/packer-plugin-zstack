@@ -25,7 +25,9 @@ func strPtr(s string) *string {
 func (s *StepCreateVMInstance) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {
 	ui := state.Get("ui").(packersdk.Ui)
 	config := state.Get("config").(*Config)
-	driver := state.Get("driver").(Driver)
+	ctx, cancel := context.WithTimeout(ctx, config.VmRunningTimeout())
+	defer cancel()
+	driver := stepDriver(ctx, state)
 
 	ui.Say(fmt.Sprintf("Creating VM instance '%s'...", config.InstanceName))
 
@@ -63,6 +65,29 @@ func (s *StepCreateVMInstance) Run(ctx context.Context, state multistep.StateBag
 		}
 	}
 
+	r := resources(state)
+	r.VM = newResource()
+	createVmInstanceParam.Params.ResourceUuid = &r.VM.UUID
+	if len(config.L3NetworkUuids) > 0 {
+		createVmInstanceParam.Params.L3NetworkUuids = config.L3NetworkUuids
+	}
+	if config.DefaultL3NetworkUuid != "" {
+		createVmInstanceParam.Params.DefaultL3NetworkUuid = &config.DefaultL3NetworkUuid
+	}
+	if config.ZoneUuid != "" {
+		createVmInstanceParam.Params.ZoneUuid = &config.ZoneUuid
+	}
+	if config.ClusterUuid != "" {
+		createVmInstanceParam.Params.ClusterUuid = &config.ClusterUuid
+	}
+	if config.HostUuid != "" {
+		createVmInstanceParam.Params.HostUuid = &config.HostUuid
+	}
+	if config.RootDiskOfferingUuid != "" {
+		createVmInstanceParam.Params.RootDiskOfferingUuid = &config.RootDiskOfferingUuid
+	}
+	createVmInstanceParam.Params.DataDiskOfferingUuids = config.DataDiskOfferingUuids
+	ui.Say(fmt.Sprintf("Tracking VM resource UUID: %s", r.VM.UUID))
 	instance, err := driver.CreateVmInstance(createVmInstanceParam)
 	if err != nil {
 		ui.Error(fmt.Sprintf("Failed to create VM instance: %v", err))
@@ -71,17 +96,36 @@ func (s *StepCreateVMInstance) Run(ctx context.Context, state multistep.StateBag
 		return multistep.ActionHalt
 	}
 
-	config.InstanceUuid = instance.UUID
-	config.RootVolumeUuid = instance.RootVolumeUuid
-	if len(instance.VmNics) == 0 || instance.VmNics[0].Ip == "" {
-		err := fmt.Errorf("VM instance '%s' has no usable network interface; cannot proceed", instance.UUID)
-		ui.Error(err.Error())
-		log.Printf("[ERROR] %v", err)
-		state.Put("error", err)
-		return multistep.ActionHalt
+	if instance == nil || instance.UUID == "" {
+		return halt(state, fmt.Errorf("CreateVmInstance returned empty inventory"))
 	}
-	config.IP = instance.VmNics[0].Ip
+	r.VM.UUID = instance.UUID
+	r.VM.Created = true
+	for _, v := range instance.AllVolumes {
+		if v.Type == "Data" {
+			r.DataVolumes = append(r.DataVolumes, ownedResource{UUID: v.UUID, Created: true})
+		}
+	}
+	config.InstanceUuid = instance.UUID
+	state.Put("instance_id", instance.UUID)
+	config.RootVolumeUuid = instance.RootVolumeUuid
+	// Prefer the selected/default NIC. A supplied communicator host needs no NIC IP.
+	for _, nic := range instance.VmNics {
+		if nic.Ip != "" && (config.DefaultL3NetworkUuid == "" || nic.L3NetworkUuid == config.DefaultL3NetworkUuid) {
+			config.IP = nic.Ip
+			break
+		}
+	}
+	if config.IP == "" && config.Comm.Type != "none" && config.Comm.SSHHost == "" && config.Comm.WinRMHost == "" {
+		return halt(state, fmt.Errorf("VM instance %s has no usable network interface; cannot proceed", instance.UUID))
+	}
 
+	if config.Comm.Type == "ssh" && config.Comm.SSHHost == "" {
+		config.Comm.SSHHost = config.IP
+	}
+	if config.Comm.Type == "winrm" && config.Comm.WinRMHost == "" {
+		config.Comm.WinRMHost = config.IP
+	}
 	log.Printf("[INFO] Successfully created VM instance (UUID: %s, IP: %s)", instance.UUID, config.IP)
 	ui.Say(fmt.Sprintf("Successfully created VM instance '%s' (UUID: %s, IP: %s)",
 		config.InstanceName, instance.UUID, config.IP))
@@ -89,43 +133,18 @@ func (s *StepCreateVMInstance) Run(ctx context.Context, state multistep.StateBag
 	return multistep.ActionContinue
 }
 
-func (s *StepCreateVMInstance) Cleanup(state multistep.StateBag) {
-	// AC-004-06: Only cleanup on failure — successful builds use StepExpungeVmInstance
-	_, hasError := state.GetOk("error")
-	if !hasError {
-		return
-	}
-
-	config := state.Get("config").(*Config)
-	if config.InstanceUuid == "" {
-		return
-	}
-
-	ui := state.Get("ui").(packersdk.Ui)
-	driver := state.Get("driver").(Driver)
-
-	ui.Say("Cleaning up: destroying temporary VM instance...")
-	log.Printf("[INFO] Cleaning up VM instance '%s' after build failure", config.InstanceUuid)
-
-	if err := driver.DestroyVmInstance(config.InstanceUuid); err != nil {
-		log.Printf("[WARN] Failed to destroy VM instance during cleanup: %v", err)
-		ui.Error(fmt.Sprintf("Warning: failed to destroy VM instance during cleanup: %v", err))
-		return
-	}
-
-	if err := driver.DeleteVmInstance(config.InstanceUuid); err != nil {
-		log.Printf("[WARN] Failed to expunge VM instance during cleanup: %v", err)
-		ui.Error(fmt.Sprintf("Warning: failed to expunge VM instance during cleanup: %v", err))
-		return
-	}
-
-	log.Printf("[INFO] Successfully cleaned up VM instance '%s'", config.InstanceUuid)
-	ui.Say("Successfully cleaned up temporary VM instance")
-}
+func (s *StepCreateVMInstance) Cleanup(state multistep.StateBag) { cleanupVM(state) }
 
 // encodeUserData returns the user data as base64. Input is always treated as
 // plaintext. Callers that already hold base64-encoded content must decode it
 // before passing it in.
 func encodeUserData(raw string) string {
 	return base64.StdEncoding.EncodeToString([]byte(strings.TrimSpace(raw)))
+}
+
+func optionalString(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }

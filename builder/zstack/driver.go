@@ -4,19 +4,54 @@
 package zstack
 
 import (
+	"context"
 	"fmt"
-	"log"
 
-	"github.com/zstackio/zstack-sdk-go-v2/pkg/client"
 	"github.com/zstackio/zstack-sdk-go-v2/pkg/param"
 	"github.com/zstackio/zstack-sdk-go-v2/pkg/view"
+	"time"
 )
 
+// Retain SDK wire models with a transport that enforces cancellation and deadlines.
 type ZStackDriver struct {
-	client *client.ZSClient
+	client  *apiClient
+	ctx     context.Context
+	timeout time.Duration
+	secrets []string
+}
+
+func (d *ZStackDriver) WithContext(ctx context.Context) Driver {
+	copy := *d
+	copy.ctx = ctx
+	return &copy
+}
+
+func (d *ZStackDriver) request(fn func(context.Context) error) error {
+	ctx := d.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	timeout := d.timeout
+	if timeout <= 0 {
+		timeout = defaultAPITimeout
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	err := fn(ctx)
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	return redactError(err, d.secrets)
 }
 
 type Driver interface {
+	DeleteExportedImage(backupStorageUUID, imageUUID string) error
+	WithContext(context.Context) Driver
+	DeleteDataVolume(string) error
+	ExpungeDataVolume(string) error
 	GetBackupStorage(uuid string) (*view.BackupStorageInventoryView, error)
 	QueryBackStorage(backupStorageName string) ([]view.BackupStorageInventoryView, error)
 	GetImage(uuid string) (*view.ImageInventoryView, error)
@@ -51,269 +86,287 @@ type Driver interface {
 }
 
 func (d *ZStackDriver) GetBackupStorage(uuid string) (*view.BackupStorageInventoryView, error) {
-	log.Printf("[DEBUG] Getting backup storage with UUID: %s", uuid)
-	backupStorage, err := d.client.GetBackupStorage(uuid)
-	if err != nil {
-		log.Printf("[ERROR] Failed to get backup storage: %v", err)
-		return nil, fmt.Errorf("failed to query backup storage: %v", err)
-	}
-	log.Printf("[INFO] Successfully retrieved backup storage")
-	return backupStorage, nil
-}
-
-func (d *ZStackDriver) QueryBackStorage(backupStorageName string) ([]view.BackupStorageInventoryView, error) {
-	log.Printf("[DEBUG] Querying backup storage with name: %s", backupStorageName)
-	params := param.NewQueryParam()
-	params.AddQ("name=" + backupStorageName)
-
-	backupStorages, err := d.client.QueryBackupStorage(&params)
-	if err != nil {
-		log.Printf("[ERROR] Failed to query backup storage: %v", err)
-		return nil, fmt.Errorf("failed to query backup storage: %v", err)
-	}
-	log.Printf("[INFO] Found %d backup storage(s)", len(backupStorages))
-	return backupStorages, nil
-}
-
-func (d *ZStackDriver) GetImage(uuid string) (*view.ImageInventoryView, error) {
-	image, err := d.client.GetImage(uuid)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query image: %v", err)
-	}
-	return image, nil
-}
-
-func (d *ZStackDriver) QueryImage(imageName string) ([]view.ImageInventoryView, error) {
-	params := param.NewQueryParam()
-	params.AddQ("name=" + imageName)
-
-	images, err := d.client.QueryImage(&params)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query image: %v", err)
-	}
-	return images, nil
-}
-
-func (d *ZStackDriver) GetL3Network(uuid string) (*view.L3NetworkInventoryView, error) {
-	l3Network, err := d.client.GetL3Network(uuid)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query L3 network: %v", err)
-	}
-	return l3Network, nil
-}
-
-func (d *ZStackDriver) QueryL3Network(networkName string) ([]view.L3NetworkInventoryView, error) {
-	params := param.NewQueryParam()
-	params.AddQ("name=" + networkName)
-
-	networks, err := d.client.QueryL3Network(&params)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query networks: %v", err)
-	}
-	return networks, nil
-}
-
-func (d *ZStackDriver) GetInstanceOffering(uuid string) (*view.InstanceOfferingInventoryView, error) {
-	instanceOffering, err := d.client.GetInstanceOffering(uuid)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query instance offering: %v", err)
-	}
-	return instanceOffering, nil
-}
-
-func (d *ZStackDriver) QueryInstanceOffering(instanceOfferingName string) ([]view.InstanceOfferingInventoryView, error) {
-	params := param.NewQueryParam()
-	params.AddQ("name=" + instanceOfferingName)
-
-	instanceOffering, err := d.client.QueryInstanceOffering(&params)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query instance offering: %v", err)
-	}
-	return instanceOffering, nil
-}
-
-func (d *ZStackDriver) GetVmInstance(uuid string) (*view.VmInstanceInventoryView, error) {
-	vmInstance, err := d.client.GetVmInstance(uuid)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query VM instance: %v", err)
-	}
-	return vmInstance, nil
-}
-
-func (d *ZStackDriver) GetVolume(uuid string) (*view.VolumeInventoryView, error) {
-	volume, err := d.client.GetVolume(uuid)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query volume: %v", err)
-	}
-	if volume == nil {
-		return nil, fmt.Errorf("volume not found %s", uuid)
-	}
-	return volume, nil
-}
-
-func (d *ZStackDriver) GetZone(uuid string) (*view.ZoneInventoryView, error) {
-	zone, err := d.client.GetZone(uuid)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query zone: %v", err)
-	}
-	return zone, nil
-}
-
-func (d *ZStackDriver) CreateVmInstance(vmInstance param.CreateVmInstanceParam) (*view.VmInstanceInventoryView, error) {
-	log.Printf("[INFO] Creating VM instance with name: %s", vmInstance.Params.Name)
-	vm, err := d.client.CreateVmInstance(vmInstance)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create VM instance '%s': %v", vmInstance.Params.Name, err)
-	}
-	log.Printf("[INFO] Successfully created VM instance with UUID: %s", vm.UUID)
-	return vm, nil
-}
-
-func (d *ZStackDriver) StopVminstance(uuid string) (*view.VmInstanceInventoryView, error) {
-	log.Printf("[INFO] Stopping VM instance '%s'", uuid)
-	stopType := "grace"
-	stopHA := "true"
-	vmInstance, err := d.client.StopVmInstance(uuid, param.StopVmInstanceParam{
-		Params: param.StopVmInstanceParamDetail{
-			Type:   &stopType,
-			StopHA: &stopHA,
-		},
+	var out view.BackupStorageInventoryView
+	err := d.request(func(ctx context.Context) error {
+		return d.client.Get(ctx, "v1/backup-storage", uuid, nil, &out)
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to stop VM instance '%s': %v", uuid, err)
+		return nil, fmt.Errorf("get BackupStorage: %w", err)
 	}
-	return vmInstance, nil
+	if out.UUID == "" {
+		return nil, fmt.Errorf("BackupStorage %s not found or returned empty inventory", uuid)
+	}
+	return &out, nil
 }
-
-func (d *ZStackDriver) DeleteVmInstance(uuid string) error {
-	log.Printf("[INFO] Deleting VM instance '%s'", uuid)
-	err := d.client.ExpungeVmInstance(uuid)
+func (d *ZStackDriver) GetImage(uuid string) (*view.ImageInventoryView, error) {
+	var out view.ImageInventoryView
+	err := d.request(func(ctx context.Context) error { return d.client.Get(ctx, "v1/images", uuid, nil, &out) })
 	if err != nil {
-		return fmt.Errorf("failed to delete VM instance '%s': %v", uuid, err)
+		return nil, fmt.Errorf("get Image: %w", err)
 	}
-	log.Printf("[INFO] Successfully deleted VM instance '%s'", uuid)
-	return nil
+	if out.UUID == "" {
+		return nil, fmt.Errorf("Image %s not found or returned empty inventory", uuid)
+	}
+	return &out, nil
 }
-
-func (d *ZStackDriver) DestroyVmInstance(uuid string) error {
-	log.Printf("[INFO] Destroying VM instance '%s'", uuid)
-	err := d.client.DestroyVmInstance(uuid, param.DeleteModePermissive)
+func (d *ZStackDriver) GetVmInstance(uuid string) (*view.VmInstanceInventoryView, error) {
+	var out view.VmInstanceInventoryView
+	err := d.request(func(ctx context.Context) error {
+		return d.client.Get(ctx, "v1/vm-instances", uuid, nil, &out)
+	})
 	if err != nil {
-		return fmt.Errorf("failed to destroy VM instance '%s': %v", uuid, err)
+		return nil, fmt.Errorf("get VmInstance: %w", err)
 	}
-	log.Printf("[INFO] Successfully destroyed VM instance '%s'", uuid)
-	return nil
+	if out.UUID == "" {
+		return nil, fmt.Errorf("VmInstance %s not found or returned empty inventory", uuid)
+	}
+	return &out, nil
 }
-
-func (d *ZStackDriver) CreateVolumeSnapshot(volumeUuid string, snapshotParam param.CreateVolumeSnapshotParam) (*view.VolumeSnapshotInventoryView, error) {
-	log.Printf("[INFO] Creating volume snapshot from volume '%s'", volumeUuid)
-	snapshot, err := d.client.CreateVolumeSnapshot(volumeUuid, snapshotParam)
+func (d *ZStackDriver) GetL3Network(uuid string) (*view.L3NetworkInventoryView, error) {
+	var out view.L3NetworkInventoryView
+	err := d.request(func(ctx context.Context) error {
+		return d.client.Get(ctx, "v1/l3-networks", uuid, nil, &out)
+	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create volume snapshot from volume '%s': %v", volumeUuid, err)
+		return nil, fmt.Errorf("get L3Network: %w", err)
 	}
-	log.Printf("[INFO] Successfully created volume snapshot '%s' from volume '%s'", snapshot.UUID, volumeUuid)
-	return snapshot, nil
+	if out.UUID == "" {
+		return nil, fmt.Errorf("L3Network %s not found or returned empty inventory", uuid)
+	}
+	return &out, nil
 }
-
-func (d *ZStackDriver) CreateImage(rootVolumeUuid string, rootVolumeParam param.CreateRootVolumeTemplateFromRootVolumeParam) (*view.ImageInventoryView, error) {
-	log.Printf("[INFO] Creating image from root volume.")
-	img, err := d.client.CreateRootVolumeTemplateFromRootVolume(rootVolumeUuid, rootVolumeParam)
+func (d *ZStackDriver) GetInstanceOffering(uuid string) (*view.InstanceOfferingInventoryView, error) {
+	var out view.InstanceOfferingInventoryView
+	err := d.request(func(ctx context.Context) error {
+		return d.client.Get(ctx, "v1/instance-offerings", uuid, nil, &out)
+	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create image: %v", err)
+		return nil, fmt.Errorf("get InstanceOffering: %w", err)
 	}
-	log.Printf("[INFO] Successfully created image '%s'", img.UUID)
-	return img, nil
+	if out.UUID == "" {
+		return nil, fmt.Errorf("InstanceOffering %s not found or returned empty inventory", uuid)
+	}
+	return &out, nil
 }
-
-func (d *ZStackDriver) CreateImageFromVolumeSnapshot(snapshotUuid string, snapshotParam param.CreateRootVolumeTemplateFromVolumeSnapshotParam) (*view.ImageInventoryView, error) {
-	log.Printf("[INFO] Creating image from volume snapshot '%s'", snapshotUuid)
-	img, err := d.client.CreateRootVolumeTemplateFromVolumeSnapshot(snapshotUuid, snapshotParam)
+func (d *ZStackDriver) GetVolume(uuid string) (*view.VolumeInventoryView, error) {
+	var out view.VolumeInventoryView
+	err := d.request(func(ctx context.Context) error { return d.client.Get(ctx, "v1/volumes", uuid, nil, &out) })
 	if err != nil {
-		return nil, fmt.Errorf("failed to create image from volume snapshot '%s': %v", snapshotUuid, err)
+		return nil, fmt.Errorf("get Volume: %w", err)
 	}
-	log.Printf("[INFO] Successfully created image '%s' from snapshot '%s'", img.UUID, snapshotUuid)
-	return img, nil
+	if out.UUID == "" {
+		return nil, fmt.Errorf("Volume %s not found or returned empty inventory", uuid)
+	}
+	return &out, nil
 }
-
+func (d *ZStackDriver) GetZone(uuid string) (*view.ZoneInventoryView, error) {
+	var out view.ZoneInventoryView
+	err := d.request(func(ctx context.Context) error { return d.client.Get(ctx, "v1/zones", uuid, nil, &out) })
+	if err != nil {
+		return nil, fmt.Errorf("get Zone: %w", err)
+	}
+	if out.UUID == "" {
+		return nil, fmt.Errorf("Zone %s not found or returned empty inventory", uuid)
+	}
+	return &out, nil
+}
 func (d *ZStackDriver) GetVolumeSnapshot(uuid string) (*view.VolumeSnapshotInventoryView, error) {
-	log.Printf("[DEBUG] Getting volume snapshot with UUID: %s", uuid)
-	snapshot, err := d.client.GetVolumeSnapshot(uuid)
+	var out view.VolumeSnapshotInventoryView
+	err := d.request(func(ctx context.Context) error {
+		return d.client.Get(ctx, "v1/volume-snapshots", uuid, nil, &out)
+	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to query volume snapshot '%s': %v", uuid, err)
+		return nil, fmt.Errorf("get VolumeSnapshot: %w", err)
 	}
-	if snapshot == nil {
-		return nil, fmt.Errorf("volume snapshot '%s' not found", uuid)
+	if out.UUID == "" {
+		return nil, fmt.Errorf("VolumeSnapshot %s not found or returned empty inventory", uuid)
 	}
-	return snapshot, nil
+	return &out, nil
 }
-
-func (d *ZStackDriver) AddImage(image param.AddImageParam) (*view.ImageInventoryView, error) {
-	log.Printf("[INFO] Adding image '%s'", image.Params.Name)
-	img, err := d.client.AddImage(image)
+func (d *ZStackDriver) QueryBackStorage(name string) ([]view.BackupStorageInventoryView, error) {
+	params := param.NewQueryParam()
+	params.AddQ("name=" + name)
+	var out []view.BackupStorageInventoryView
+	err := d.request(func(ctx context.Context) error {
+		return d.client.List(ctx, "v1/backup-storage", &params, &out)
+	})
+	return out, err
+}
+func (d *ZStackDriver) QueryImage(name string) ([]view.ImageInventoryView, error) {
+	params := param.NewQueryParam()
+	params.AddQ("name=" + name)
+	var out []view.ImageInventoryView
+	err := d.request(func(ctx context.Context) error { return d.client.List(ctx, "v1/images", &params, &out) })
+	return out, err
+}
+func (d *ZStackDriver) QueryL3Network(name string) ([]view.L3NetworkInventoryView, error) {
+	params := param.NewQueryParam()
+	params.AddQ("name=" + name)
+	var out []view.L3NetworkInventoryView
+	err := d.request(func(ctx context.Context) error {
+		return d.client.List(ctx, "v1/l3-networks", &params, &out)
+	})
+	return out, err
+}
+func (d *ZStackDriver) QueryInstanceOffering(name string) ([]view.InstanceOfferingInventoryView, error) {
+	params := param.NewQueryParam()
+	params.AddQ("name=" + name)
+	var out []view.InstanceOfferingInventoryView
+	err := d.request(func(ctx context.Context) error {
+		return d.client.List(ctx, "v1/instance-offerings", &params, &out)
+	})
+	return out, err
+}
+func (d *ZStackDriver) CreateVmInstance(params param.CreateVmInstanceParam) (*view.VmInstanceInventoryView, error) {
+	var out view.VmInstanceInventoryView
+	err := d.request(func(ctx context.Context) error {
+		return d.client.Post(ctx, "v1/vm-instances", params, &out)
+	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to add image '%s': %v", image.Params.Name, err)
+		return nil, fmt.Errorf("CreateVmInstance: %w", err)
 	}
-	log.Printf("[INFO] Successfully added image '%s' with UUID: %s", img.Name, img.UUID)
-	return img, nil
-}
-
-func (d *ZStackDriver) DeleteImage(uuid string) error {
-	log.Printf("[INFO] Deleting image '%s'", uuid)
-	if err := d.client.DeleteImage(uuid, param.DeleteModePermissive); err != nil {
-		return fmt.Errorf("failed to delete image '%s': %v", uuid, err)
+	if out.UUID == "" {
+		return nil, fmt.Errorf("CreateVmInstance returned empty inventory UUID")
 	}
-	return nil
+	return &out, nil
 }
-
-func (d *ZStackDriver) ExpungeImage(uuid string) error {
-	log.Printf("[INFO] Expunging image '%s'", uuid)
-	if err := d.client.ExpungeImage(uuid); err != nil {
-		return fmt.Errorf("failed to expunge image '%s': %v", uuid, err)
+func (d *ZStackDriver) AddImage(params param.AddImageParam) (*view.ImageInventoryView, error) {
+	var out view.ImageInventoryView
+	err := d.request(func(ctx context.Context) error { return d.client.Post(ctx, "v1/images", params, &out) })
+	if err != nil {
+		return nil, fmt.Errorf("AddImage: %w", err)
 	}
-	return nil
+	if out.UUID == "" {
+		return nil, fmt.Errorf("AddImage returned empty inventory UUID")
+	}
+	return &out, nil
 }
-
+func (d *ZStackDriver) CreateImage(rootVolumeUuid string, params param.CreateRootVolumeTemplateFromRootVolumeParam) (*view.ImageInventoryView, error) {
+	var out view.ImageInventoryView
+	err := d.request(func(ctx context.Context) error {
+		return d.client.Post(ctx, "v1/images/root-volume-templates/from/volumes/"+rootVolumeUuid, params, &out)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("CreateImage: %w", err)
+	}
+	if out.UUID == "" {
+		return nil, fmt.Errorf("CreateImage returned empty inventory UUID")
+	}
+	return &out, nil
+}
+func (d *ZStackDriver) CreateImageFromVolumeSnapshot(snapshotUuid string, params param.CreateRootVolumeTemplateFromVolumeSnapshotParam) (*view.ImageInventoryView, error) {
+	var out view.ImageInventoryView
+	err := d.request(func(ctx context.Context) error {
+		return d.client.Post(ctx, "v1/images/root-volume-templates/from/volume-snapshots/"+snapshotUuid, params, &out)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("CreateImageFromVolumeSnapshot: %w", err)
+	}
+	if out.UUID == "" {
+		return nil, fmt.Errorf("CreateImageFromVolumeSnapshot returned empty inventory UUID")
+	}
+	return &out, nil
+}
+func (d *ZStackDriver) CreateVolumeSnapshot(volumeUuid string, params param.CreateVolumeSnapshotParam) (*view.VolumeSnapshotInventoryView, error) {
+	var out view.VolumeSnapshotInventoryView
+	err := d.request(func(ctx context.Context) error {
+		return d.client.Post(ctx, "v1/volumes/"+volumeUuid+"/volume-snapshots", params, &out)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("CreateVolumeSnapshot: %w", err)
+	}
+	if out.UUID == "" {
+		return nil, fmt.Errorf("CreateVolumeSnapshot returned empty inventory UUID")
+	}
+	return &out, nil
+}
+func (d *ZStackDriver) CreateDataVolume(params param.CreateDataVolumeParam) (*view.VolumeInventoryView, error) {
+	var out view.VolumeInventoryView
+	err := d.request(func(ctx context.Context) error {
+		return d.client.Post(ctx, "v1/volumes/data", params, &out)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("CreateDataVolume: %w", err)
+	}
+	if out.UUID == "" {
+		return nil, fmt.Errorf("CreateDataVolume returned empty inventory UUID")
+	}
+	return &out, nil
+}
+func (d *ZStackDriver) StopVminstance(uuid string) (*view.VmInstanceInventoryView, error) {
+	var out view.VmInstanceInventoryView
+	params := map[string]any{"stopVmInstance": map[string]any{"type": "grace", "stopHA": "true"}}
+	err := d.request(func(ctx context.Context) error {
+		return d.client.Put(ctx, "v1/vm-instances", uuid, params, &out)
+	})
+	if err != nil {
+		return nil, err
+	}
+	if out.UUID == "" {
+		return nil, fmt.Errorf("StopVmInstance returned empty inventory UUID")
+	}
+	return &out, nil
+}
+func (d *ZStackDriver) ExportImage(uuid string, params param.ExportImageFromBackupStorageParam) (*view.ExportImageFromBackupStorageEventView, error) {
+	var out view.ExportImageFromBackupStorageEventView
+	err := d.request(func(ctx context.Context) error {
+		return d.client.PutWithRespKey(ctx, "v1/backup-storage", uuid, "", map[string]any{"exportImageFromBackupStorage": params.Params}, &out)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+func (d *ZStackDriver) AttachGuestToolsToVm(uuid string) error {
+	return d.request(func(ctx context.Context) error {
+		return d.client.Put(ctx, "v1/vm-instances", uuid, map[string]any{"attachGuestToolsIsoToVm": map[string]any{}}, nil)
+	})
+}
+func (d *ZStackDriver) AttachDataVolumeToVm(vmUuid, volumeUuid string) (*view.VolumeInventoryView, error) {
+	var out view.VolumeInventoryView
+	err := d.request(func(ctx context.Context) error {
+		return d.client.Post(ctx, "v1/volumes/"+volumeUuid+"/vm-instances/"+vmUuid, param.AttachDataVolumeToVmParam{}, &out)
+	})
+	return &out, err
+}
 func (d *ZStackDriver) ValidateCredentials() error {
 	params := param.NewQueryParam()
-	if _, err := d.client.QueryZone(&params); err != nil {
-		return fmt.Errorf("credentials validation failed: %v", err)
-	}
-	return nil
+	var out []view.ZoneInventoryView
+	return d.request(func(ctx context.Context) error { return d.client.List(ctx, "v1/zones", &params, &out) })
+}
+func (d *ZStackDriver) DestroyVmInstance(uuid string) error {
+	return d.request(func(ctx context.Context) error {
+		return d.client.Delete(ctx, "v1/vm-instances", uuid, string(param.DeleteModePermissive))
+	})
+}
+func (d *ZStackDriver) DeleteImage(uuid string) error {
+	return d.request(func(ctx context.Context) error {
+		return d.client.Delete(ctx, "v1/images", uuid, string(param.DeleteModePermissive))
+	})
+}
+func (d *ZStackDriver) DeleteDataVolume(uuid string) error {
+	return d.request(func(ctx context.Context) error {
+		return d.client.Delete(ctx, "v1/volumes", uuid, string(param.DeleteModePermissive))
+	})
+}
+func (d *ZStackDriver) DeleteVmInstance(uuid string) error {
+	return d.request(func(ctx context.Context) error {
+		return d.client.Put(ctx, "v1/vm-instances", uuid, map[string]any{"expungeVmInstance": map[string]any{}}, nil)
+	})
+}
+func (d *ZStackDriver) ExpungeImage(uuid string) error {
+	return d.request(func(ctx context.Context) error {
+		return d.client.Put(ctx, "v1/images", uuid, map[string]any{"expungeImage": map[string]any{}}, nil)
+	})
+}
+func (d *ZStackDriver) ExpungeDataVolume(uuid string) error {
+	return d.request(func(ctx context.Context) error {
+		return d.client.Put(ctx, "v1/volumes", uuid, map[string]any{"expungeDataVolume": map[string]any{}}, nil)
+	})
 }
 
-func (d *ZStackDriver) ExportImage(backupStorageUuid string, params param.ExportImageFromBackupStorageParam) (*view.ExportImageFromBackupStorageEventView, error) {
-	log.Printf("[INFO] Exporting image from backup storage '%s'", backupStorageUuid)
-	exportedImg, err := d.client.ExportImageFromBackupStorage(backupStorageUuid, params)
-	if err != nil {
-		return nil, fmt.Errorf("failed to export image: %v", err)
-	}
-	return exportedImg, nil
-}
-
-func (d *ZStackDriver) CreateDataVolume(volume param.CreateDataVolumeParam) (*view.VolumeInventoryView, error) {
-	vol, err := d.client.CreateDataVolume(volume)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create data volume: %v", err)
-	}
-	return vol, nil
-}
-
-func (d *ZStackDriver) AttachGuestToolsToVm(vmUuid string) error {
-	log.Printf("[INFO] Attaching guest tools to VM '%s'", vmUuid)
-	_, err := d.client.AttachGuestToolsIsoToVm(vmUuid, param.AttachGuestToolsIsoToVmParam{})
-	if err != nil {
-		return fmt.Errorf("failed to attach guest tools to VM '%s': %v", vmUuid, err)
-	}
-	log.Printf("[INFO] Successfully attached guest tools to VM '%s'", vmUuid)
-	return nil
-}
-
-func (d *ZStackDriver) AttachDataVolumeToVm(vmUuid, volumeUuid string) (*view.VolumeInventoryView, error) {
-	log.Printf("[INFO] Attaching data volume '%s' to VM '%s'", volumeUuid, vmUuid)
-	datavol, err := d.client.AttachDataVolumeToVm(volumeUuid, vmUuid, param.AttachDataVolumeToVmParam{})
-	if err != nil {
-		return nil, fmt.Errorf("failed to attach data volume '%s' to VM '%s': %v", volumeUuid, vmUuid, err)
-	}
-	log.Printf("[INFO] Successfully attached data volume '%s' to VM '%s'", volumeUuid, vmUuid)
-	return datavol, nil
+func (d *ZStackDriver) DeleteExportedImage(backupStorageUUID, imageUUID string) error {
+	return d.request(func(ctx context.Context) error {
+		return d.client.Delete(ctx, "v1/backup-storage/"+backupStorageUUID+"/exported-images", imageUUID, string(param.DeleteModePermissive))
+	})
 }

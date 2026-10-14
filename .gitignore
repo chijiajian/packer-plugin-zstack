@@ -12,6 +12,7 @@ settings.local.json
 .sysyhus/**
 .sisyphus/**
 docs/stories/**
+!docs/stories/STORY-PKR-QUALITY-20261013.md
 docs/epic-automation_iac.md
 example/local-dev.pkr.hcl
 
@@ -39,3 +40,6 @@ github.com/
 *.kubeconfig
 
 
+
+# Local acceptance-test outputs
+.acceptance/

@@ -17,6 +17,9 @@ func TestStepExpungeVmInstance_Run(t *testing.T) {
 		config := &Config{}
 		driver := &MockDriver{}
 		state := testStateBag(config, driver)
+		if config.InstanceUuid != "" {
+			resources(state).VM = ownedResource{UUID: config.InstanceUuid, Created: true}
+		}
 
 		action := (&StepExpungeVmInstance{}).Run(context.Background(), state)
 
@@ -29,6 +32,9 @@ func TestStepExpungeVmInstance_Run(t *testing.T) {
 		config := &Config{InstanceConfig: InstanceConfig{InstanceUuid: "vm-1"}}
 		driver := &MockDriver{}
 		state := testStateBag(config, driver)
+		if config.InstanceUuid != "" {
+			resources(state).VM = ownedResource{UUID: config.InstanceUuid, Created: true}
+		}
 
 		action := (&StepExpungeVmInstance{}).Run(context.Background(), state)
 
@@ -44,6 +50,9 @@ func TestStepExpungeVmInstance_Run(t *testing.T) {
 		config := &Config{InstanceConfig: InstanceConfig{InstanceUuid: "vm-1"}}
 		driver := &MockDriver{DestroyVmInstanceErr: errors.New("destroy fail")}
 		state := testStateBag(config, driver)
+		if config.InstanceUuid != "" {
+			resources(state).VM = ownedResource{UUID: config.InstanceUuid, Created: true}
+		}
 
 		action := (&StepExpungeVmInstance{}).Run(context.Background(), state)
 
@@ -58,6 +67,9 @@ func TestStepExpungeVmInstance_Run(t *testing.T) {
 		config := &Config{InstanceConfig: InstanceConfig{InstanceUuid: "vm-1"}}
 		driver := &MockDriver{DeleteVmInstanceErr: errors.New("delete fail")}
 		state := testStateBag(config, driver)
+		if config.InstanceUuid != "" {
+			resources(state).VM = ownedResource{UUID: config.InstanceUuid, Created: true}
+		}
 
 		action := (&StepExpungeVmInstance{}).Run(context.Background(), state)
 

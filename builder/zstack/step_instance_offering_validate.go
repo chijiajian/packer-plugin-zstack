@@ -28,8 +28,9 @@ func (s *StepInstanceOfferingValidate) Run(ctx context.Context, state multistep.
 		return multistep.ActionContinue
 	}
 
-	instanceOfferings, err := validateInstanceOffering(state)
+	instanceOfferings, err := validateInstanceOffering(ctx, state)
 	if err != nil {
+		state.Put("error", err)
 		ui.Errorf("Instance offering validation failed: %s, please use cpu_num and memory_size instead", err)
 		return multistep.ActionHalt
 	}
@@ -39,9 +40,9 @@ func (s *StepInstanceOfferingValidate) Run(ctx context.Context, state multistep.
 	return multistep.ActionContinue
 }
 
-func validateInstanceOffering(state multistep.StateBag) ([]view.InstanceOfferingInventoryView, error) {
+func validateInstanceOffering(ctx context.Context, state multistep.StateBag) ([]view.InstanceOfferingInventoryView, error) {
 	config := state.Get("config").(*Config)
-	driver := state.Get("driver").(Driver)
+	driver := stepDriver(ctx, state)
 
 	instanceOffering, err := driver.QueryInstanceOffering(config.InstanceOfferingName)
 	if err != nil {
@@ -49,6 +50,9 @@ func validateInstanceOffering(state multistep.StateBag) ([]view.InstanceOffering
 	}
 	if len(instanceOffering) == 0 {
 		return nil, fmt.Errorf("instance offering '%s' not found", config.InstanceOfferingName)
+	}
+	if len(instanceOffering) > 1 {
+		return nil, fmt.Errorf("multiple instance offering resources match the name; specify UUID")
 	}
 	return instanceOffering, nil
 }

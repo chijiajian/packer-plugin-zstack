@@ -42,6 +42,7 @@ func TestBuilderPrepare_UsesAccessConfigEnvVars(t *testing.T) {
 	_, _, err := b.Prepare(map[string]interface{}{
 		"communicator":        "none",
 		"backup_storage_name": "local-backup",
+		"image_name":          "target", "image_uuid": "source", "instance_name": "temporary", "network_uuid": "net", "instance_offering_uuid": "offering",
 	})
 
 	assert.NoError(t, err)
@@ -101,6 +102,7 @@ func TestBuilderPrepare_ValidTimeouts(t *testing.T) {
 		"account_name":        "admin",
 		"account_password":    "pw",
 		"backup_storage_name": "local-backup",
+		"image_name":          "target", "image_uuid": "source", "instance_name": "temporary", "network_uuid": "net", "instance_offering_uuid": "offering",
 		"image_ready_timeout": "10m",
 		"vm_running_timeout":  "2m",
 	})

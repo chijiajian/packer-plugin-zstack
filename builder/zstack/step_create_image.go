@@ -16,10 +16,12 @@ import (
 type StepCreateImage struct {
 }
 
-func (s *StepCreateImage) Run(_ context.Context, state multistep.StateBag) multistep.StepAction {
+func (s *StepCreateImage) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {
 	ui := state.Get("ui").(packersdk.Ui)
 	config := state.Get("config").(*Config)
-	driver := state.Get("driver").(Driver)
+	ctx, cancel := context.WithTimeout(ctx, config.ImageReadyTimeout())
+	defer cancel()
+	driver := stepDriver(ctx, state)
 
 	ui.Say(fmt.Sprintf("Creating image '%s' from VM root volume...", config.ImageName))
 	log.Printf("[INFO] Starting image creation from root volume: %s", config.RootVolumeUuid)
@@ -31,6 +33,9 @@ func (s *StepCreateImage) Run(_ context.Context, state multistep.StateBag) multi
 		return multistep.ActionHalt
 	}
 
+	if config.RootVolumeUuid == "" {
+		return halt(state, fmt.Errorf("root volume UUID is empty"))
+	}
 	description := config.ImageDescription
 	if description == "" {
 		description = "Auto created by packer-plugin-zstack"
@@ -57,6 +62,10 @@ func (s *StepCreateImage) Run(_ context.Context, state multistep.StateBag) multi
 		createImageFromRootVolumeParam.Params.Architecture = &arch
 	}
 
+	r := resources(state)
+	r.Image = newResource()
+	createImageFromRootVolumeParam.Params.ResourceUuid = &r.Image.UUID
+	ui.Say(fmt.Sprintf("Tracking image resource UUID: %s", r.Image.UUID))
 	image, err := driver.CreateImage(config.RootVolumeUuid, createImageFromRootVolumeParam)
 	if err != nil {
 		ui.Error(fmt.Sprintf("Failed to create image: %v", err))
@@ -65,6 +74,11 @@ func (s *StepCreateImage) Run(_ context.Context, state multistep.StateBag) multi
 		return multistep.ActionHalt
 	}
 
+	if image == nil || image.UUID == "" {
+		return halt(state, fmt.Errorf("image creation returned empty inventory"))
+	}
+	r.Image.UUID = image.UUID
+	r.Image.Created = true
 	config.ImageUuid = image.UUID
 
 	log.Printf("[INFO] Successfully created image with UUID: %s", image.UUID)
@@ -72,4 +86,9 @@ func (s *StepCreateImage) Run(_ context.Context, state multistep.StateBag) multi
 	return multistep.ActionContinue
 }
 
-func (s *StepCreateImage) Cleanup(state multistep.StateBag) {}
+func (s *StepCreateImage) Cleanup(state multistep.StateBag) {
+	config := state.Get("config").(*Config)
+	if buildFailed(state) && !config.KeepImageOnError {
+		cleanupImage(state, &resources(state).Image)
+	}
+}

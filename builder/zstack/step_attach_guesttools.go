@@ -18,12 +18,13 @@ type StepAttachGuestTools struct {
 func (s *StepAttachGuestTools) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {
 	ui := state.Get("ui").(packersdk.Ui)
 	config := state.Get("config").(*Config)
-	driver := state.Get("driver").(Driver)
+	driver := stepDriver(ctx, state)
 
 	instanceUuid := config.InstanceUuid
 	if instanceUuid == "" {
 		err := fmt.Errorf("instance UUID is required but not provided")
 		ui.Error(err.Error())
+		state.Put("error", err)
 		log.Printf("[ERROR] %v", err)
 		return multistep.ActionHalt
 	}
@@ -36,6 +37,9 @@ func (s *StepAttachGuestTools) Run(ctx context.Context, state multistep.StateBag
 		return multistep.ActionHalt
 	}
 
+	if vm == nil {
+		return halt(state, fmt.Errorf("empty VM inventory"))
+	}
 	ui.Say(fmt.Sprintf("Attaching guest tools to VM '%s'...", vm.Name))
 	log.Printf("[INFO] Attaching guest tools to VM '%s' (UUID: %s)", vm.Name, instanceUuid)
 

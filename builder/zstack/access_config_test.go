@@ -172,7 +172,8 @@ func TestGetEnvOrDefault(t *testing.T) {
 
 	os.Setenv("TEST_ENV_VAR", "env_value")
 	result := getEnvOrDefault("TEST_ENV_VAR", "default_value")
-	assert.Equal(t, "env_value", result)
+	assert.Equal(t, "default_value", result)
+	assert.Equal(t, "env_value", getEnvOrDefault("TEST_ENV_VAR", ""))
 
 	os.Unsetenv("TEST_ENV_VAR")
 	result = getEnvOrDefault("TEST_ENV_VAR", "default_value")
