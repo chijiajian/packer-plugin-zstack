@@ -57,7 +57,7 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 		return nil, fmt.Errorf("failed to initialize ZStack Driver: %v", err)
 	}
 
-	driver.secrets = append(driver.secrets, b.config.SourceImageUrl, b.config.UserData, encodeUserData(b.config.UserData), b.config.Comm.SSHPassword)
+	driver.secrets = append(driver.secrets, b.config.SourceImageUrl, b.config.UserData, encodeUserData(b.config.UserData), b.config.Comm.SSHPassword, b.config.Comm.WinRMPassword)
 	return b.runWithDriver(ctx, ui, hook, driver)
 }
 

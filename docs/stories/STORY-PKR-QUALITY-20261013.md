@@ -90,8 +90,8 @@ v0.0.10 的 `pkg/util/httputils/httputils.go:requestInternal` 使用 `http.NewRe
 
 - 最终库存核查：本次 `packer-quality-*` VM、镜像、快照及对应根盘查询均为 0；取消测试时间之后的新建数据盘查询无残留；原源镜像仍为 Ready。此结论不涵盖上文首轮导出副本的存储文件。
 - 安全核查：`.env` 权限 `0600`，`git check-ignore` 命中，`git ls-files .env` 为空；逐文件比对本次 AK/SK，Git 可见文件匹配数为 0。凭证和验收日志不进入提交；代码通过 PR 提交审核，本次不发布版本。
-- **Q12-A（密码及镜像准备通过；密钥受元数据服务阻塞）**：用户提供的两套镜像已完成非 root/root 密码认证及 SSH provision hook 全流程验收。用户提供的 Ubuntu 镜像最初禁用 cloud-init；按追加指示，通过 SSH 安装 Guest Tools 并修正 cloud-init，已制成临时模板并重验；客户机访问元数据端点得到空响应，密钥认证仍未通过，后续见 Q12-D。旧源镜像的公钥失败记录作为历史证据保留。
-- **Q12-B（部分完成，2026-10-14）**：已实测 ImageStore、双/三网卡、默认网卡顺序及 zone/cluster/host 放置；ImageStore 暴露导出残留缺陷 Q12-E。ARM、Windows/WinRM、bastion 仍未云端验收，不代表全部部署组合通过。
+- **Q12-A（密码与私网自动密钥/清理通过；公共网问题见 Q12-D）**：用户提供的两套镜像已完成非 root/root 密码认证及 SSH provision hook 全流程验收。用户提供的 Ubuntu 镜像最初禁用 cloud-init；按追加指示，通过 SSH 安装 Guest Tools 并修正 cloud-init，已制成临时模板并重验；客户机访问元数据端点得到空响应，密钥认证仍未通过，后续见 Q12-D。旧源镜像的公钥失败记录作为历史证据保留。
+- **Q12-B（部分完成，2026-10-14）**：已实测 ImageStore、双/三网卡、默认网卡顺序及 zone/cluster/host 放置；ImageStore 暴露导出残留缺陷 Q12-E。ARM 基础流程已通过；Linux 私网自动密钥及 VM bastion 组合已通过；Windows 结果见文末，不代表全部部署组合通过。
 - **Q12-C（已完成，2026-10-14）**：首轮镜像 `5389ceda4d92410983de461dbe883ba5` 的存储侧核查通过：RBD 数据、导出授权对象和 RBD trash 均无残留，证据见下节。后续轮次已验证先删除副本的修复流程。
 
 SSH systemTag 请求格式已与[官方 CreateVmInstance 文档](https://www.zstack.io/docs/4.3.6/html5-en/ZStack_Dev_Guide/topic/ZStack_2.1_Dev_Guide_0039.html)核对：传递公钥明文；userdata 另外进行 base64 编码。
@@ -211,3 +211,32 @@ Q12-E 复核与收尾：
 - 本轮临时 VM 和导入源镜像清理完成，无 cleanup warnings；输出镜像 Destroy 成功，导出 URL 删除前可读、删除后返回 HTTP 404/410。
 
 这关闭了 ARM 基础流程的未验收项。ARM 多网卡、其它主存储组合和生成密钥/cloud-init 场景尚未单独认证。本轮 LocalStorage 路径通过不代表 Q12-E 的 Ceph 根盘 raw 导出问题已修复；ZSTAC-89526 及用户要求保留的旧环境现场保持原状态。私有原始证据为 `.acceptance/cloud-arm.log`，认证信息和日志不提交 Git。
+
+### cloud-init 文档复核与 Windows 验收任务（2026-10-14）
+
+- Q12-D 重新核对用法：ZStack 官方创建说明要求安装 cloud-init 的镜像同时导入 User Data；SSH Key 管理说明也明确平台删除配置不等于客户机 authorized_keys 清空。此前只传 sshkey、未传 User Data 的结果不足以直接定性元数据服务缺陷。准备独立临时模板，保持默认用户与 datasource 配置一致，补充最小 `#cloud-config` User Data 后重验自动密钥及制镜像前清理，不手工注入测试公钥来替代验证。
+- Windows/WinRM：使用用户指定的 Windows 10 qcow2，在 x86 环境创建独立测试 VM，核对 Guest Tools、WinRM 监听与认证；只在该临时 VM 内按需准备 WinRM。验证 Administrator 身份、文件传输、远程 PowerShell 命令、制镜像、导出和资源清理。候选密码只保存于本机忽略的 `.env`。
+- 既有 Q12-E raw 导出复现现场继续保留。
+
+文档依据：[ZStack 标准创建云主机](https://www.zstack.io/docs/4.5.0/html5/a_print_ZStack_User_Guide/topic/ZStack_User_Guide_0033_2.html)、[SSH Key Management](https://www.zstack.io/docs/4.2.0/html5-en/a_print_ZStack_User_Guide/topic/ZStack_User_Guide_0033_8.html)、[cloud-init ZStack datasource](https://docs.cloud-init.io/en/23.3.3/reference/datasources/zstack.html)、[Packer WinRM communicator](https://developer.hashicorp.com/packer/docs/communicators/winrm)。
+
+#### cloud-init 复核结果
+
+- ZStack 的 `UserdataBuilder` 会将 `sshkey` 转成额外的 `#cloud-config`，包含 `ssh_authorized_keys` 与 `disable_root: false`。因此没有额外传 User Data 不能单独解释先前失败；仍按官方说明补充最小 User Data 做了对照。
+- 公共网络对照仍失败（326.24 秒）：相同 cloud-init 24.4 模板、默认用户 zstack、显式 User Data，元数据接口 TCP 可连但无 HTTP 响应，最终 DataSourceNone，公钥认证失败。客户机真实地址/路由与 inventory 一致。宿主机 lighttpd 1.4.67 日志同步记录 `mod_rewrite invalid result (not beginning with '/')`；配置的兜底重写含 `../zstack-default/...`。这将问题进一步缩小到该网络元数据请求的匹配/重写链路；具体规则为何命中兜底仍需 Cloud 侧确认。未修改共享 lighttpd、iptables 或 agent。
+- 使用同一 prepared 镜像，在已有私网中重验；将本轮自有准备 VM 增加一张私网 NIC 作为跳板，避免宿主机缺少到私网的路由。该用例 **PASS，75.23 秒**：平台注入生成公钥，真实免密码 SSH、cloud-init 完成、用户 authorized_keys 存在该公钥，执行真实清理后用户/root 均无该公钥，再关机、制镜像、清理产物。未手工写入测试公钥，未使用密码作为目标 VM 的认证回退。
+- 自动密钥注入、制镜像前公钥清理以及 SSH bastion 的指定 Linux 组合已验收通过。Q12-D 收窄为公共网络元数据服务异常，不能再将自动密钥能力整体标记为未通过；其它网络、平台和 cloud-init 版本仍需按部署验收。
+- 私有证据：`cloud-key-userdata.log`、`cloudinit-guest-address.log`、`cloudinit-host-http.log`、`cloud-key-private-jumpvm.log`。首轮使用宿主机作 bastion 的失败属于宿主机无私网路由，不作为插件缺陷。
+
+#### Windows / HTTPS WinRM 验收结果
+
+- 使用用户提供的 Windows 10 镜像，在 x86 / ZStack 5.5.38 环境导入独立源镜像（约 37.3 GiB），创建 2 CPU / 4 GiB 准备 VM。第二个候选密码通过 Administrator 认证，密码值不写入文档。
+- 原镜像没有可用的 WinRM 监听；通过 Guest Tools 只在该临时 VM 中准备 HTTPS WinRM、自签名证书及限定到测试客户端 IP 的防火墙规则，关闭默认 HTTP WinRM 入站规则。首次启动和服务初始化需数分钟，验收连接超时显式使用 10 分钟。
+- 首轮 Packer 通过 HTTPS/NTLM 登录、上传文件、PowerShell 核查上传内容并删除、验证 Administrator/64 位操作系统、优雅关机和制镜像成功；最终 Ceph 导出报 `ORG_ZSTACK_STORAGE_CEPH_BACKUP_10001` / `export/addtoken`，整轮 **FAIL，328.02 秒**。不将该失败写成全流程通过。
+- 第二轮显式 `skip_export=true`，Packer 构建 **PASS，321.32 秒**：相同 WinRM/传输/远程命令断言、输出 WindowsVirtio/x86_64 元数据、VM 清理及产物 Destroy 均通过，源模板保持 Ready。
+- 对本轮自有 Windows prepared 镜像单独执行直接 REST 导出复测成功：下载四字节返回 HTTP 206，删除导出副本后返回 HTTP 404。首次失败的具体原因尚未确认；这记录为导出失败后的独立复测通过，不是同一整轮 Packer 导出重跑通过。部署验收仍应运行带导出探针的完整场景。
+- 未执行 Sysprep/generalize；不声明该镜像克隆后的机器 SID、计算机名和应用封装已认证，也不扩展为所有 Windows/WinRM TLS/认证方式都通过。
+- 验收脚本增加 WinRM、平台/资源规格、User Data、SSH bastion 参数，以及文件传输和输出平台断言；插件的 API 错误脱敏列表补入 WinRM 密码。本地 race/vet 与 diff 检查通过。
+- 私有证据：`windows-prepare.log`、`cloud-windows-winrm.log`、`cloud-windows-winrm-noexport.log`、`windows-export-recheck.log`、`windows-export-probe.log`。
+
+本轮收尾：准备 VM（含其新增私网 NIC）、本轮导入源镜像、prepared 模板及关联根盘均已删除；按本轮 VM/输出 UUID 复查库存为 0。既有原始源镜像保持 Ready，用户要求保留的 Q12-E raw 输出镜像保持 Ready、复现 VM 保持 Stopped，没有执行该现场的删除或 GC。凭证扫描无匹配，`.env` 维持 0600 且受 Git 忽略。

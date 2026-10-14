@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -48,12 +49,22 @@ func TestAcceptanceCloud(t *testing.T) {
 		raw["network_uuids"] = networks
 	}
 	for env, field := range map[string]string{
+		"ZSTACK_ACC_PLATFORM":             "platform",
+		"ZSTACK_ACC_USER_DATA":            "userdata",
 		"ZSTACK_ACC_ARCHITECTURE":         "architecture",
 		"ZSTACK_ACC_DEFAULT_NETWORK_UUID": "default_network_uuid",
 		"ZSTACK_ACC_ZONE_UUID":            "zone_uuid", "ZSTACK_ACC_CLUSTER_UUID": "cluster_uuid", "ZSTACK_ACC_HOST_UUID": "host_uuid",
 	} {
 		if value := os.Getenv(env); value != "" {
 			raw[field] = value
+		}
+	}
+	for env, field := range map[string]string{"ZSTACK_ACC_CPU_NUM": "cpu_num", "ZSTACK_ACC_MEMORY_SIZE": "memory_size"} {
+		if value := os.Getenv(env); value != "" {
+			n, err := strconv.Atoi(value)
+			require.NoError(t, err, env)
+			require.Greater(t, n, 0, env)
+			raw[field] = n
 		}
 	}
 	if imageURL != "" {
@@ -70,6 +81,21 @@ func TestAcceptanceCloud(t *testing.T) {
 		raw["ssh_password"] = os.Getenv("ZSTACK_ACC_SSH_PASSWORD")
 		raw["ssh_timeout"] = "5m"
 		raw["ssh_clear_authorized_keys"] = true
+		for env, field := range map[string]string{
+			"ZSTACK_ACC_SSH_BASTION_HOST": "ssh_bastion_host", "ZSTACK_ACC_SSH_BASTION_USERNAME": "ssh_bastion_username", "ZSTACK_ACC_SSH_BASTION_PASSWORD": "ssh_bastion_password",
+		} {
+			if value := os.Getenv(env); value != "" {
+				raw[field] = value
+			}
+		}
+	}
+	if comm == "winrm" {
+		raw["winrm_username"] = os.Getenv("ZSTACK_ACC_WINRM_USERNAME")
+		raw["winrm_password"] = os.Getenv("ZSTACK_ACC_WINRM_PASSWORD")
+		raw["winrm_timeout"] = "10m"
+		raw["winrm_use_ntlm"] = true
+		raw["winrm_use_ssl"] = os.Getenv("ZSTACK_ACC_WINRM_USE_SSL") == "1"
+		raw["winrm_insecure"] = os.Getenv("ZSTACK_ACC_WINRM_INSECURE") == "1"
 	}
 	if disk := os.Getenv("ZSTACK_ACC_DATA_DISK_OFFERING_UUID"); disk != "" {
 		raw["data_disk_offering_uuids"] = []string{disk}
@@ -81,6 +107,10 @@ func TestAcceptanceCloud(t *testing.T) {
 	defer cancel()
 	ui := &packersdk.BasicUi{Reader: os.Stdin, Writer: os.Stdout, ErrorWriter: os.Stderr}
 	hook := &acceptanceHook{ssh: comm == "ssh", expectedUser: os.Getenv("ZSTACK_ACC_SSH_USERNAME"), expectedArch: arch}
+	if comm == "winrm" {
+		hook.winrm = true
+		hook.expectedUser = os.Getenv("ZSTACK_ACC_WINRM_USERNAME")
+	}
 	if len(networks) > 0 || os.Getenv("ZSTACK_ACC_ZONE_UUID") != "" || os.Getenv("ZSTACK_ACC_CLUSTER_UUID") != "" || os.Getenv("ZSTACK_ACC_HOST_UUID") != "" {
 		hook.verify = func(ctx context.Context) error {
 			d, e := b.config.AccessConfig.driver(ctx, time.Minute)
@@ -197,10 +227,15 @@ func TestAcceptanceCloud(t *testing.T) {
 	// Existing input is preserved; an image imported by this build is removed.
 	d, err := b.config.AccessConfig.driver(ctx, time.Minute)
 	require.NoError(t, err)
-	if arch != "" {
+	if arch != "" || os.Getenv("ZSTACK_ACC_PLATFORM") != "" {
 		output, err := d.GetImage(artifact.Id())
 		require.NoError(t, err)
-		require.Equal(t, arch, output.Architecture, "output image architecture")
+		if arch != "" {
+			require.Equal(t, arch, output.Architecture, "output image architecture")
+		}
+		if platform := os.Getenv("ZSTACK_ACC_PLATFORM"); platform != "" {
+			require.Equal(t, platform, output.Platform, "output image platform")
+		}
 	}
 	if imageUUID != "" {
 		source, err := d.GetImage(imageUUID)
@@ -253,6 +288,7 @@ func acceptanceExportProbe(ctx context.Context, url string, exists bool) error {
 
 type acceptanceHook struct {
 	ssh          bool
+	winrm        bool
 	expectedUser string
 	expectedArch string
 	after        func(context.Context) error
@@ -287,6 +323,27 @@ func (h *acceptanceHook) Run(ctx context.Context, name string, ui packersdk.Ui, 
 		}
 		if !strings.HasPrefix(output.String(), h.expectedUser+"\n") {
 			return fmt.Errorf("SSH connected as an unexpected user")
+		}
+	}
+	if h.winrm {
+		// Exercise both file upload and remote execution through the real communicator.
+		path := `C:\Windows\Temp\packer-acceptance-` + newResource().UUID + `.txt`
+		const payload = "packer-winrm-acceptance"
+		if err := comm.Upload(path, strings.NewReader(payload), nil); err != nil {
+			return fmt.Errorf("WinRM upload failed: %w", err)
+		}
+		var output strings.Builder
+		command := `powershell -NoProfile -NonInteractive -Command "$ErrorActionPreference='Stop'; try { if ((Get-Content -Raw -LiteralPath '` + path + `') -ne '` + payload + `') { throw 'upload mismatch' }; [Console]::WriteLine([Environment]::UserName); [Console]::WriteLine([Environment]::Is64BitOperatingSystem) } finally { Remove-Item -Force -LiteralPath '` + path + `' }"`
+		cmd := &packersdk.RemoteCmd{Command: command, Stdout: &output}
+		if err := cmd.RunWithUi(ctx, comm, ui); err != nil {
+			return err
+		}
+		if cmd.ExitStatus() != 0 {
+			return fmt.Errorf("WinRM acceptance command exited %d", cmd.ExitStatus())
+		}
+		lines := strings.Split(strings.TrimSpace(strings.ReplaceAll(output.String(), "\r\n", "\n")), "\n")
+		if len(lines) != 2 || !strings.EqualFold(lines[0], h.expectedUser) || !strings.EqualFold(lines[1], "true") {
+			return fmt.Errorf("WinRM identity or 64-bit operating system assertion failed")
 		}
 	}
 	if h.after != nil {
