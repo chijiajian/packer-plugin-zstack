@@ -5,6 +5,7 @@ package zstack
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -31,18 +32,11 @@ func (s *StepWaitForImageReady) Run(ctx context.Context, state multistep.StateBa
 
 	ui.Say("Waiting for image status to become ready...")
 
-	timeout := time.After(config.ImageReadyTimeout())
 	ticker := time.NewTicker(config.PollInterval())
 	defer ticker.Stop()
 
 	for {
 		select {
-		case <-timeout:
-			err := fmt.Errorf("timeout waiting for image %s status to become ready", config.ImageUuid)
-			state.Put("error", err)
-			ui.Error(err.Error())
-			log.Printf("[ERROR] %v", err)
-			return multistep.ActionHalt
 		case <-ticker.C:
 			image, err := driver.GetImage(config.ImageUuid)
 			if err != nil {
@@ -70,8 +64,13 @@ func (s *StepWaitForImageReady) Run(ctx context.Context, state multistep.StateBa
 			ui.Message(fmt.Sprintf("image status is %s, waiting...", image.Status))
 
 		case <-ctx.Done():
-			state.Put("error", ctx.Err())
-			log.Printf("[INFO] Context cancelled while waiting for image %s", config.ImageUuid)
+			err := ctx.Err()
+			if errors.Is(err, context.DeadlineExceeded) {
+				err = fmt.Errorf("timeout waiting for image %s status to become ready: %w", config.ImageUuid, err)
+			}
+			state.Put("error", err)
+			ui.Error(err.Error())
+			log.Printf("[INFO] Waiting for image %s ended: %v", config.ImageUuid, err)
 			return multistep.ActionHalt
 		}
 	}

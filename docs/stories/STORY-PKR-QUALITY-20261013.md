@@ -240,3 +240,10 @@ Q12-E 复核与收尾：
 - 私有证据：`windows-prepare.log`、`cloud-windows-winrm.log`、`cloud-windows-winrm-noexport.log`、`windows-export-recheck.log`、`windows-export-probe.log`。
 
 本轮收尾：准备 VM（含其新增私网 NIC）、本轮导入源镜像、prepared 模板及关联根盘均已删除；按本轮 VM/输出 UUID 复查库存为 0。既有原始源镜像保持 Ready，用户要求保留的 Q12-E raw 输出镜像保持 Ready、复现 VM 保持 Stopped，没有执行该现场的删除或 GC。凭证扫描无匹配，`.env` 维持 0600 且受 Git 忽略。
+
+### Q13：CI 等待步骤超时竞态（2026-10-14）
+
+- 现象：提交 `10eb99c` 的 GitHub Actions 在 `TestStepWaitForImageReady_Run/TimeoutHalts` 失败；预期包含 `timeout`，实际为 `context deadline exceeded`。
+- 原因：等待镜像/VM 的步骤同时创建 `context.WithTimeout` 和 `time.After`，两个超时信号竞争，返回错误不一致。此前单次本地检查未触发，不能证明该路径稳定。
+- 修复：两处均使用 context 的单一截止时间，超时错误附带资源上下文并通过 `%w` 保留 `context.DeadlineExceeded`；主动取消保留 `context.Canceled`。补充错误类型断言。
+- 本地验证：相关等待测试开启 race 重复 100 次通过；与 CI 相同的 `make test plugin-check`、格式、`go mod tidy` 和生成 schema 差异检查均通过。云端 CI 结果以修复提交的 Actions 为准。

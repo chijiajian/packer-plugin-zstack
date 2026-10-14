@@ -5,6 +5,7 @@ package zstack
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -30,17 +31,11 @@ func (s *StepWaitForRunning) Run(ctx context.Context, state multistep.StateBag) 
 
 	ui.Say("Waiting for VM instance to become running...")
 
-	timeout := time.After(config.VmRunningTimeout())
 	ticker := time.NewTicker(config.PollInterval())
 	defer ticker.Stop()
 
 	for {
 		select {
-		case <-timeout:
-			err := fmt.Errorf("timeout waiting for instance %s to become running", config.InstanceUuid)
-			state.Put("error", err)
-			ui.Error(err.Error())
-			return multistep.ActionHalt
 		case <-ticker.C:
 			instance, err := driver.GetVmInstance(config.InstanceUuid)
 			if err != nil {
@@ -59,8 +54,12 @@ func (s *StepWaitForRunning) Run(ctx context.Context, state multistep.StateBag) 
 			ui.Message(fmt.Sprintf("[%s] Instance state is %s, waiting...", time.Now().Format(time.RFC3339), instance.State))
 
 		case <-ctx.Done():
-			state.Put("error", ctx.Err())
-			ui.Error("Context cancelled while waiting for VM running")
+			err := ctx.Err()
+			if errors.Is(err, context.DeadlineExceeded) {
+				err = fmt.Errorf("timeout waiting for instance %s to become running: %w", config.InstanceUuid, err)
+			}
+			state.Put("error", err)
+			ui.Error(err.Error())
 			return multistep.ActionHalt
 		}
 	}
