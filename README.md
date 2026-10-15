@@ -102,6 +102,21 @@ PACKER_PLUGIN_PATH=$(pwd) packer build examples/basic.pkr.hcl
 For more information on how to configure the plugin, please read the
 documentation located in the [`docs/`](docs) directory.
 
+## Configuration and lifecycle
+
+See the [ZStack builder guide](docs/builders/zstack.mdx) for authentication, SSH/WinRM, networking, placement, timeouts and resource cleanup. Output images contain the root disk only; existing source images and snapshots are retained.
+
+## Installing an operating system from ISO
+
+Use `source "zstack-iso"` with a blank root-disk offering and installer answer files over HTTP or CD. The installer configures SSH/WinRM credentials; ZStack userdata is not used. The builder verifies the installed OS again after detaching installation media and restarting from disk.
+
+See the [ISO builder guide](docs/builders/iso.mdx) and [unattended installation examples](examples/iso/README.md) for Debian, Ubuntu, Rocky ARM and Windows.
+
+## Development and testing
+
+Run `make test plugin-check` for local tests and plugin validation. Run `make generate` to regenerate the HCL schema and public web documentation. For opt-in tests against a real cloud, see the [acceptance guide](docs/testing.md).
+
+Version-specific changes are listed in [GitHub Releases](https://github.com/chijiajian/packer-plugin-zstack/releases).
 
 ## Contributing
 
@@ -112,53 +127,3 @@ documentation located in the [`docs/`](docs) directory.
   fix a bug, please do so by opening a Pull Request in this GitHub repository.
   In case of feature contribution, we kindly ask you to open an issue to
   discuss it beforehand.
-
-## Quality fixes and upgrade (2026-10)
-
-This development version uses **Go 1.26.9**, **ZStack SDK v0.0.10**, and **Packer Plugin SDK v0.6.12**. The `go-cty` replacement remains necessary for the SDK's HCL generator.
-
-Environment variables are defaults; explicit configuration wins. Use one authentication method. Copy `.env.example` to `.env`, restrict it with `chmod 600 .env`, and load it with `set -a; source .env; set +a`. Packer does not load dotenv files itself. `.env` and `.acceptance/` are ignored by Git.
-
-Failed or cancelled builds now return no artifact. Only a newly created, ready output image is owned by the artifact; existing source images and snapshots are never deleted. `Files()` is empty for remote images; use `Id()`, `State("image_uuid")`, and `State("image_url")`. Temporary VMs and their newly created data disks are destroyed and expunged. Imported source images are cleaned unless `keep_source_image = true`; failed output images are cleaned unless `keep_image_on_error = true`. Cleanup failures report resource UUIDs and appear in `State("cleanup_warnings")`. A server-side asynchronous create can outlive cancellation: inspect the reported UUID before retrying.
-
-`api_timeout` defaults to `30m`; `cleanup_timeout` defaults to `5m`. `image_ready_timeout` and `vm_running_timeout` default to `5m` and now also bound their corresponding create requests. Increase these for large images: the tested Ceph-to-ImageStore root-image transfers took about 9–10 minutes, exceeding the default image timeout. The plugin keeps SDK models but uses cancellable HTTP requests and job polling because the SDK transport does not bind its context. `skip_export = true` disables export. Only explicit unsupported-export errors are downgraded; permission and storage errors fail the build.
-
-Optional placement and disk settings are `zone_uuid`, `cluster_uuid`, `host_uuid`, `root_disk_offering_uuid`, and `data_disk_offering_uuids`. `network_uuids` enables multiple NICs and is exclusive with the singular network selectors; `default_network_uuid` chooses the default NIC. Output templates contain the root disk only. Required inputs, conflicting sources and duplicate resource names are validated early. Snapshot sources must be Ready, Enabled root-volume snapshots, with communicator `none`.
-
-The generated HCL schema includes the full SSH/WinRM options, including bastion and WinRM TLS/port. Use `ssh_clear_authorized_keys = true` to remove the temporary public key before creating the image. Existing private-key and agent authentication are preserved.
-
-Run `make test plugin-check` locally and `go generate ./...` to regenerate the HCL schema. Cloud acceptance is opt-in: set `ZSTACK_ACC=1`, `ZSTACK_ACC_IMAGE_UUID`, `ZSTACK_ACC_NETWORK_UUID`, `ZSTACK_ACC_BACKUP_STORAGE_UUID`, and the usual credentials, then run `go test ./builder/zstack -run '^TestAcceptanceCloud$' -v -count=1 -timeout=35m`. This creates temporary cloud resources and deletes its output image. Set `ZSTACK_ACC_COMMUNICATOR=ssh` and `ZSTACK_ACC_SSH_USERNAME` to exercise SSH; otherwise the communicator is disabled.
-
-For URL-import acceptance, set `ZSTACK_ACC_IMAGE_URL` instead of `ZSTACK_ACC_IMAGE_UUID` (exactly one is required). With SSH enabled, `ZSTACK_ACC_SSH_PASSWORD` selects password authentication; leave it empty to exercise generated-key authentication. Keep image URLs and credentials in the ignored local `.env`. The test checks the actual SSH user, runs system commands through the provision hook, and verifies that its imported source image is removed.
-
-Generated-key authentication requires a guest image that processes the cloud's SSH-key injection (for example, enabled and correctly configured cloud-init) and the matching SSH user. A successful password login does not establish that generated-key injection works. Use an existing password/private key for images with cloud-init disabled.
-
-To prepare such an image, boot a disposable VM with password access, attach the Guest Tools ISO and run its `zs-tools-install.sh` over SSH. Guest Tools installation and cloud-init configuration are separate steps: check for `cloud-init.disabled` and installer configuration that pins the datasource to `None`. On the tested Ubuntu 24.04.2 / cloud-init 24.4 image, `DataSourceEc2` recognizes ZStack; the prepared image uses `datasource_list: [ Ec2, None ]` and a default user matching `ssh_username`. Remove the installer override, enable cloud-init, run `cloud-init clean --logs --machine-id`, then stop the VM and create a new template before testing a fresh VM. Apply changes to a disposable copy and retain the original source image. See the [cloud-init datasource implementation](https://github.com/canonical/cloud-init/blob/24.4/cloudinit/sources/DataSourceEc2.py) and [image cleanup command](https://docs.cloud-init.io/en/latest/reference/cli.html#clean).
-
-The metadata endpoint must also be reachable from the guest. Guest Tools installation or an enabled cloud-init service alone does not prove that key injection works; validate a fresh boot and successful cloud-init completion.
-
-Set `ZSTACK_ACC_SCENARIO=key-cleanup` with SSH enabled and no password to verify generated-key injection and removal. The test image needs cloud-init, Python 3 and passwordless sudo. It waits for cloud-init to finish, confirms the temporary key exists for the SSH user, and checks both that user's and root's `authorized_keys` after the cleanup step and before shutdown/image creation.
-
-For multi-NIC acceptance, replace `ZSTACK_ACC_NETWORK_UUID` with comma-separated `ZSTACK_ACC_NETWORK_UUIDS` and set `ZSTACK_ACC_DEFAULT_NETWORK_UUID`. Optional `ZSTACK_ACC_ZONE_UUID`, `ZSTACK_ACC_CLUSTER_UUID`, and `ZSTACK_ACC_HOST_UUID` constrain placement. The test checks actual NIC IP allocations, the default network and selected communicator IP, and requested placement. With SSH enabled it also verifies login through the selected network; it does not certify guest routing on every NIC. Set `ZSTACK_ACC_CHECK_EXPORT=1` with export enabled to read four bytes from the output URL before destruction and require HTTP 404/410 afterward.
-
-On the tested ZStack 5.5.38 ImageStore backend, the delete-export API returned success while the exported raw file remained downloadable (HTTP 206). This is tracked as Q12-E in the acceptance record; Ceph passed the same deletion probe. Verify export cleanup on your deployed backend. `skip_export = true` avoids creating a download copy when one is not needed.
-
-Set `ZSTACK_ACC_ARCHITECTURE=aarch64` for ARM acceptance. This passes the architecture to the builder, checks the output image metadata, and, with SSH enabled, requires the guest to report `aarch64` from `uname -m`.
-
-For cloud-init key acceptance, prepare a disposable source image with cloud-init enabled, its cache cleaned, and a default user matching `ZSTACK_ACC_SSH_USERNAME`. The official [ZStack creation guide](https://www.zstack.io/docs/4.5.0/html5/a_print_ZStack_User_Guide/topic/ZStack_User_Guide_0033_2.html) requires working DHCP/Userdata services and a User Data payload for cloud-init images. Pass plaintext cloud-config through `userdata` in HCL or `ZSTACK_ACC_USER_DATA` in acceptance (for example, `#cloud-config\npreserve_hostname: true\n`). The SSH tag also generates cloud-config on the server; an extra payload cannot repair an unreachable metadata service. Platform key removal does not guarantee removal from guest files, so keep `ssh_clear_authorized_keys = true` for generated-key builds. Optional `ZSTACK_ACC_SSH_BASTION_HOST`, `ZSTACK_ACC_SSH_BASTION_USERNAME` and `ZSTACK_ACC_SSH_BASTION_PASSWORD` exercise the SSH communicator through a reachable bastion.
-
-For Windows acceptance, configure WinRM in a disposable source image first, then set `ZSTACK_ACC_COMMUNICATOR=winrm`, `ZSTACK_ACC_PLATFORM=WindowsVirtio`, and `ZSTACK_ACC_WINRM_USERNAME`/`ZSTACK_ACC_WINRM_PASSWORD`. Optional `ZSTACK_ACC_CPU_NUM` and `ZSTACK_ACC_MEMORY_SIZE` override test sizing (memory is in MiB). `ZSTACK_ACC_WINRM_USE_SSL=1` selects HTTPS; `ZSTACK_ACC_WINRM_INSECURE=1` skips certificate validation for a self-signed test certificate. The test verifies Administrator identity (or the configured username), a 64-bit OS, file upload/readback/removal, output platform/architecture, and image lifecycle. This does not certify Sysprep/generalization or every Windows version.
-
-### Installing an operating system from ISO
-
-Build/install this branch locally until a release containing ISO support is available. Use `source "zstack-iso"` (or `iso_install = true` on the default builder). This creates a blank root disk from `root_disk_offering_uuid`, boots an ISO, delivers installer answer files, then creates a root-volume template. `format = "iso"` describes the input installer; the output disk format is determined by ZStack/storage.
-
-The installer must configure the SSH/WinRM account and credential. ISO mode defaults the SSH/WinRM connection timeout to 30 minutes; set `ssh_timeout`/`winrm_timeout` for your installation duration. ISO mode rejects ZStack `userdata`, `sshkey` and `communicator = "none"`; it does not generate or inject a key through cloud metadata. For key authentication, put the matching public key in your answer file and use `ssh_private_key_file`.
-
-- `http_directory` or `http_content` starts a temporary Packer HTTP server. `http_ip` is the address reachable from the guest; set it explicitly when route discovery selects the wrong interface. Bind controls still use `http_bind_address`/`http_interface`. These fields are separate: `http_ip` advertises an address and does not bind a listener.
-- `cd_files`, `cd_content` and `cd_label` create an auxiliary ISO with the Packer SDK, import it as a temporary ZStack ISO and attach it as the second CD. The machine running Packer needs `xorriso`, `mkisofs`, `hdiutil` or another SDK-supported ISO creation tool. Backup storage must reach `http_ip` on the temporary CD publisher port; that publisher serves only the generated ISO at a random URL, not the source directory. Small generated ISOs are padded to ZStack's 1 MiB minimum import size. The image is removed during cleanup even when `keep_source_image` retains the installer.
-- `boot_command`/`boot_wait`/`boot_key_interval` use the VM's TCP VNC console and support Packer key expressions and `{{ .HTTPIP }}`, `{{ .HTTPPort }}`, `{{ .Name }}`. The runner must reach the host's VNC port; SPICE and console WebSocket proxies are not supported. Use answer files for secrets rather than typing them in boot commands, since SDK debug logs include keystrokes.
-- Required `installation_check_command` must return zero only in the installed OS. After the first successful connection/check, the builder stops the VM, detaches both installer and answer ISOs, selects hard-disk boot, starts it and reconnects/checks again before running provisioners. An installer SSH shell or VM `Running` status alone is insufficient.
-- The answer-file syntax and boot keys are OS/installer specific. The plugin transports files without interpreting Kickstart, Preseed, Autoinstall or Autounattend semantics. Install cloud-init and Guest Tools inside the target OS only if desired for later template instances.
-
-See [the Debian ISO example](examples/iso/debian.pkr.hcl). It uses HTTP Preseed plus an auxiliary CD containing the installation completion script. Match `/dev/vda`, `/dev/sr1`, BIOS/UEFI boot commands, mirrors and filesystem checks to your installer. Protect answer files and variable files containing credentials, exclude them from Git, and do not enable installation debug logging in shared logs. The example retains an installation credential for Packer; remove/rotate it in a final provisioner according to your image policy. See [the ISO examples](examples/iso/README.md) for Ubuntu, Rocky ARM and Windows unattended installation templates.
