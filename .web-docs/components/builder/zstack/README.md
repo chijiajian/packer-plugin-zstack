@@ -140,7 +140,7 @@ build {
 
 ## Lifecycle, timeouts and optional placement
 
-See the [configuration guide](https://github.com/chijiajian/packer-plugin-zstack#quality-fixes-and-upgrade-2026-10) and [examples](https://github.com/chijiajian/packer-plugin-zstack/tree/main/examples) for setup and usage.
+See the [configuration guide](https://github.com/chijiajian/packer-plugin-zstack#quick-start) and [examples](https://github.com/chijiajian/packer-plugin-zstack/tree/main/examples) for setup and usage.
 
 | Setting | Default | Behavior |
 | --- | --- | --- |
@@ -158,6 +158,8 @@ See the [configuration guide](https://github.com/chijiajian/packer-plugin-zstack
 | `boot_mode` | unset | `Legacy` or `UEFI`; when unset, use the image/cloud default |
 | `data_disk_offering_uuids` | unset | Data disks created with the VM, cleaned after the build |
 
-Set `communicator = "ssh"` or `"winrm"` and supply credentials for the source image. If using automatic SSH key injection, the source image must support the required cloud-init metadata and key cleanup. ISO installation configures credentials through the installer answer file instead.
+Set `communicator = "ssh"` or `"winrm"` and supply credentials for the source image. If using automatic SSH key injection, the source image must support the required cloud-init metadata and key cleanup. Set `ssh_clear_authorized_keys = true` to remove the temporary public key from the guest before image creation; existing private-key and SSH-agent authentication are preserved. ISO installation configures credentials through the installer answer file instead.
+
+Increase `image_ready_timeout` for large imports or image transfers. Only explicit unsupported-export errors are downgraded to warnings; permission and storage errors fail the build. Snapshot builds require an Enabled/Ready root-volume snapshot and `communicator = "none"`.
 
 Only the root volume is included in the output template. Existing source resources are never cleaned. A failed or cancelled build returns no artifact. Artifact `Files()` is empty; use `Id()` / `State("image_uuid")`, `State("image_url")`, `State("backup_storage_uuid")`, and `State("cleanup_warnings")` for metadata. Inspect UUIDs in cleanup warnings because server-side creation may complete after local cancellation.
