@@ -39,7 +39,7 @@ Backup storage is required for image creation and export. In the normal VM build
 
 Use `image_description` to set a custom description for the generated image.
 
-The plugin also supports building an image directly from an existing **volume snapshot** by setting `source_volume_snapshot_uuid`. In this mode no VM is created and SSH/provisioners are skipped; the builder creates the image template from that existing snapshot — see [`examples/from_snapshot.pkr.hcl`](examples/from_snapshot.pkr.hcl).
+The `zstack-snapshot` builder creates an image directly from an existing **root-volume snapshot** using `source_volume_snapshot_uuid`. This new builder requires a local build until released; v1.2.0 does not include it. The legacy `zstack` snapshot input remains supported with a deprecation warning in newer builds. In this mode no VM is created and SSH/provisioners are skipped; the builder creates the image template from that existing snapshot — see [`examples/from_snapshot.pkr.hcl`](examples/from_snapshot.pkr.hcl).
 
 See the [`examples/`](examples) directory for ready-to-run HCL examples covering account/password auth, AK/SK auth, and UUID passthrough.
 

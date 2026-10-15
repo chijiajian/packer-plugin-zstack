@@ -18,9 +18,10 @@ import (
 const BuilderId = "packer.zstack"
 
 type Builder struct {
-	config Config
-	runner multistep.Runner
-	ui     packersdk.Ui
+	config          Config
+	snapshotBuilder bool
+	runner          multistep.Runner
+	ui              packersdk.Ui
 }
 
 func (b *Builder) ConfigSpec() hcldec.ObjectSpec { return b.config.FlatMapstructure().HCL2Spec() }
@@ -44,6 +45,9 @@ func (b *Builder) Prepare(raws ...any) ([]string, []string, error) {
 
 	if errs != nil {
 		return nil, nil, errs
+	}
+	if b.config.SourceVolumeSnapshotUuid != "" && !b.snapshotBuilder {
+		return nil, []string{"Using source_volume_snapshot_uuid with zstack is deprecated; use zstack-snapshot. Snapshot builds do not execute provisioners."}, nil
 	}
 	return nil, nil, nil
 }
