@@ -1,4 +1,4 @@
-# Requires the development plugin containing ISO/boot_mode support.
+# Requires plugin v1.2.0 or later with ISO/boot_mode support.
 packer {
   required_plugins {
     zstack = {
