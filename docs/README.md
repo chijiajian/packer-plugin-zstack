@@ -4,14 +4,14 @@ Build custom ZStack images from an existing VM image, a volume snapshot, or an u
 
 ## Installation
 
-Declare `github.com/chijiajian/zstack` in Packer's `required_plugins` block, select a plugin version containing the features you need, and run `packer init`. The ISO builder and newer placement/lifecycle fields require a compatible release or a local build from current source.
+Declare `github.com/chijiajian/zstack` in Packer's `required_plugins` block, select a plugin version containing the features you need, and run `packer init`. Use v1.2.0 or later for ISO builds and v1.2.1 or later for the dedicated snapshot builder.
 
 ```hcl
 packer {
   required_plugins {
     zstack = {
       source  = "github.com/chijiajian/zstack"
-      version = ">= 1.1.0"
+      version = ">= 1.2.1"
     }
   }
 }
@@ -24,7 +24,7 @@ Authenticate with either `ZSTACK_ACCESS_KEY_ID`/`ZSTACK_ACCESS_KEY_SECRET` or `Z
 - [ZStack](/packer/plugins/builders/zstack/zstack) (`zstack`): provision a VM from an existing image and create a template from its root disk.
 - [ZStack ISO](/packer/plugins/builders/zstack/iso) (`zstack-iso`): install an OS onto a blank root disk using HTTP/CD answer files, verify hard-disk boot, then provision and create a template. ZStack userdata is not used for installation.
 
-- [ZStack Snapshot](/packer/plugins/builders/zstack/snapshot) (`zstack-snapshot`): convert an existing root-volume snapshot directly into an image, without starting a VM or running provisioners. Requires a local build until released; not available in v1.2.0. The old `zstack` snapshot input remains compatible but is deprecated.
+- [ZStack Snapshot](/packer/plugins/builders/zstack/snapshot) (`zstack-snapshot`): convert an existing root-volume snapshot directly into an image, without starting a VM or running provisioners. Available starting with v1.2.1. The old `zstack` snapshot input remains compatible but is deprecated.
 
 ## Examples and requirements
 

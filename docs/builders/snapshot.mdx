@@ -4,7 +4,7 @@ Type: `zstack-snapshot`
 
 Convert an existing Enabled, Ready root-volume snapshot into a root-volume template. The source snapshot is retained. No VM is created, no SSH/WinRM connection is made, and provisioners are not executed. This builder does not create snapshots of existing VMs or capture their memory, additional disks or VM configuration.
 
-This new builder requires a local build containing the change until a release includes it. It is not available in v1.2.0. Existing `source "zstack"` configurations using `source_volume_snapshot_uuid` continue to work, with a deprecation warning in newer builds. Change the source type and build reference to migrate, and remove unused VM/communicator settings.
+Available starting with v1.2.1. Existing `source "zstack"` configurations using `source_volume_snapshot_uuid` continue to work, with a deprecation warning in newer builds. Change the source type and build reference to migrate, and remove unused VM/communicator settings.
 
 ```hcl
 source "zstack-snapshot" "base" {

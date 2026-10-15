@@ -1,4 +1,4 @@
-This example requires a build containing `zstack-iso`; install the development plugin locally before running it. The example pins `1.0.1-dev` to avoid selecting an older released plugin without the ISO builder; change the constraint when using a release that contains this feature. Supply variables through a local ignored `.pkrvars.hcl` file or `PKR_VAR_*` environment variables, and use the normal `ZSTACK_*` credentials.
+These examples require plugin v1.2.0 or later with `zstack-iso` support. Run `packer init` to install the release selected by each template. Supply variables through a local ignored `.pkrvars.hcl` file or `PKR_VAR_*` environment variables, and use the normal `ZSTACK_*` credentials.
 
 The Debian BIOS boot command loads Preseed from Packer's HTTP server. The auxiliary CD contains `post-install.sh`; Preseed mounts `/dev/sr1` and runs that script in the installer to configure target SSH and completion markers. Change disk/CD device names for your VM hardware. This is an installer script, not a ZStack userdata payload.
 

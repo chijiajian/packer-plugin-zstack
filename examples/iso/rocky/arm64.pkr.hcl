@@ -3,7 +3,7 @@ packer {
   required_plugins {
     zstack = {
       source  = "github.com/chijiajian/zstack"
-      version = "= 1.0.1-dev"
+      version = "= 1.2.0"
     }
   }
 }

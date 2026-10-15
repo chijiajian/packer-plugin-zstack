@@ -116,7 +116,7 @@ source "zstack" "example" {
 
 ### Example: Build From Volume Snapshot
 
-Use `zstack-snapshot` to convert an existing root-volume snapshot. This new builder requires a local build until a release includes it; v1.2.0 users can continue using `zstack` with the same snapshot parameter. No VM is created and provisioners are not executed:
+Use `zstack-snapshot` to convert an existing root-volume snapshot. Available starting with v1.2.1; v1.2.0 users can continue using `zstack` with the same snapshot parameter. No VM is created and provisioners are not executed:
 
 ```hcl
 source "zstack-snapshot" "from_snapshot" {

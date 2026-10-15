@@ -7,7 +7,7 @@ Choose one template for your build. The top-level HCL files are independent exam
 | [basic.pkr.hcl](basic.pkr.hcl) | Account/password authentication, an existing source image, and shell provisioning |
 | [aksk.pkr.hcl](aksk.pkr.hcl) | Access-key authentication and URL-based image import |
 | [uuid.pkr.hcl](uuid.pkr.hcl) | Select resources by UUID |
-| [from_snapshot.pkr.hcl](from_snapshot.pkr.hcl) | Use `zstack-snapshot` to convert a root-volume snapshot (local build required; not in v1.2.0) |
+| [from_snapshot.pkr.hcl](from_snapshot.pkr.hcl) | Use `zstack-snapshot` to convert a root-volume snapshot (requires v1.2.1 or later) |
 | [advanced.pkr.hcl](advanced.pkr.hcl) | Multiple networks, placement, timeouts and cleanup settings |
 | [iso/](iso/README.md) | Install Debian, Ubuntu, Rocky ARM or Windows from ISO using unattended answer files |
 | [load_images.sh](load_images.sh) | Optional shell provisioner for checking the guest environment |
