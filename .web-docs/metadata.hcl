@@ -17,6 +17,11 @@ integration {
   }
   component {
     type = "builder"
+    name = "ZStack Snapshot"
+    slug = "snapshot"
+  }
+  component {
+    type = "builder"
     name = "ZStack ISO"
     slug = "iso"
   }

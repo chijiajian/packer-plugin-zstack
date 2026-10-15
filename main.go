@@ -18,6 +18,7 @@ func main() {
 	pps := plugin.NewSet()
 	pps.RegisterBuilder(plugin.DEFAULT_NAME, new(zstack.Builder))
 	pps.RegisterBuilder("iso", new(zstack.ISOBuilder))
+	pps.RegisterBuilder("snapshot", new(zstack.SnapshotBuilder))
 	pps.SetVersion(zstackVersion.PluginVersion)
 	err := pps.Run()
 	if err != nil {

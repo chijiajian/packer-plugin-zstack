@@ -21,8 +21,10 @@ Authenticate with either `ZSTACK_ACCESS_KEY_ID`/`ZSTACK_ACCESS_KEY_SECRET` or `Z
 
 ## Builders
 
-- [ZStack](/packer/plugins/builders/zstack/zstack) (`zstack`): provision a VM from an existing image and create a template from its root disk, or build directly from an existing volume snapshot.
+- [ZStack](/packer/plugins/builders/zstack/zstack) (`zstack`): provision a VM from an existing image and create a template from its root disk.
 - [ZStack ISO](/packer/plugins/builders/zstack/iso) (`zstack-iso`): install an OS onto a blank root disk using HTTP/CD answer files, verify hard-disk boot, then provision and create a template. ZStack userdata is not used for installation.
+
+- [ZStack Snapshot](/packer/plugins/builders/zstack/snapshot) (`zstack-snapshot`): convert an existing root-volume snapshot directly into an image, without starting a VM or running provisioners. Requires a local build until released; not available in v1.2.0. The old `zstack` snapshot input remains compatible but is deprecated.
 
 ## Examples and requirements
 
