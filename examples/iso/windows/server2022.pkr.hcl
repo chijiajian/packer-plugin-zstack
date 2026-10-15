@@ -1,9 +1,9 @@
-# Requires the development plugin containing ISO/boot_mode support.
+# Requires ZStack plugin v1.2.0 or later.
 packer {
   required_plugins {
     zstack = {
       source  = "github.com/chijiajian/zstack"
-      version = "= 1.0.1-dev"
+      version = "= 1.2.0"
     }
   }
 }
