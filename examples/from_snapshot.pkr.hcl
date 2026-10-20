@@ -1,6 +1,7 @@
 # Copyright ZStack.io, Inc. 2013, 2026
 # SPDX-License-Identifier: MPL-2.0
 
+# Requires plugin v1.2.1 or later.
 # Build an image from an existing ZStack volume snapshot (no VM/SSH/provisioning).
 variable "zstack_host" {
   type    = string
@@ -26,13 +27,13 @@ variable "snapshot_uuid" {
 packer {
   required_plugins {
     zstack = {
-      version = ">= 1.1.0"
+      version = ">= 1.2.1"
       source  = "github.com/chijiajian/zstack"
     }
   }
 }
 
-source "zstack" "from_snapshot" {
+source "zstack-snapshot" "from_snapshot" {
   zstack_host      = var.zstack_host
   account_name     = var.account_name
   account_password = var.account_password
@@ -47,5 +48,5 @@ source "zstack" "from_snapshot" {
 }
 
 build {
-  sources = ["source.zstack.from_snapshot"]
+  sources = ["source.zstack-snapshot.from_snapshot"]
 }

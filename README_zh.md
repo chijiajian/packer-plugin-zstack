@@ -126,10 +126,12 @@ source "zstack" "uuid_passthrough" {
 }
 ```
 
-### 4. 从已有卷快照构建（跳过 VM/SSH）
+### 4. 从已有根云盘快照构建（跳过 VM/SSH）
+
+`zstack-snapshot` 从 v1.2.1 开始提供。旧的 `zstack + source_volume_snapshot_uuid` 用法继续兼容，新构建会提示迁移。新入口不接受 SSH、网络或 VM 规格配置，也不会执行 provisioner。
 
 ```hcl
-source "zstack" "from_snapshot" {
+source "zstack-snapshot" "from_snapshot" {
   zstack_host      = "zstack.example.com"
   account_name     = env("ZSTACK_ACCOUNT_NAME")
   account_password = env("ZSTACK_ACCOUNT_PASSWORD")
@@ -144,7 +146,7 @@ source "zstack" "from_snapshot" {
 }
 
 build {
-  sources = ["source.zstack.from_snapshot"]
+  sources = ["source.zstack-snapshot.from_snapshot"]
 }
 ```
 

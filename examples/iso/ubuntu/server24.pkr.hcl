@@ -1,4 +1,4 @@
-# Requires ZStack plugin v1.2.0 or later.
+# Requires plugin v1.2.0 or later with ISO/boot_mode support.
 packer {
   required_plugins {
     zstack = {

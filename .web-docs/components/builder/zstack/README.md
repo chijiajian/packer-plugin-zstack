@@ -1,7 +1,7 @@
 
 Type: `zstack`
 
-Creates a root-volume template from a provisioned VM or an existing volume snapshot. For unattended operating-system installation from ISO, use the [ZStack ISO builder](/packer/integrations/chijiajian/zstack/latest/components/builder/iso).
+Creates a root-volume template from a provisioned VM. For direct conversion of an existing root-volume snapshot, use the [ZStack Snapshot builder](/packer/integrations/chijiajian/zstack/latest/components/builder/snapshot). For unattended operating-system installation from ISO, use the [ZStack ISO builder](/packer/integrations/chijiajian/zstack/latest/components/builder/iso).
 
 
 <!-- Builder Configuration Fields -->
@@ -48,7 +48,7 @@ Creates a root-volume template from a provisioned VM or an existing volume snaps
 
 - `image_description` (String) - Description for the created image. Defaults to the image name if not set.
 
-- `source_volume_snapshot_uuid` (String) - UUID of an existing ZStack volume snapshot. When set, the builder creates a root volume template from that existing snapshot and skips VM creation, SSH connection, and provisioners. Requires `image_name` and one of `backup_storage_name` / `backup_storage_uuid`.
+- `source_volume_snapshot_uuid` (String, deprecated on this builder) - UUID of an existing ZStack volume snapshot. When set, the builder creates a root volume template from that existing snapshot and skips VM creation, SSH connection, and provisioners. Requires `image_name` and one of `backup_storage_name` / `backup_storage_uuid`.
 
 **Network Parameters**
 
@@ -116,10 +116,10 @@ source "zstack" "example" {
 
 ### Example: Build From Volume Snapshot
 
-Skip VM creation entirely and build an image from an existing volume snapshot. No SSH connection or provisioners are required:
+Use `zstack-snapshot` to convert an existing root-volume snapshot. Available starting with v1.2.1; v1.2.0 users can continue using `zstack` with the same snapshot parameter. No VM is created and provisioners are not executed:
 
 ```hcl
-source "zstack" "from_snapshot" {
+source "zstack-snapshot" "from_snapshot" {
   zstack_host      = "zstack.example.com"
   account_name     = env("ZSTACK_ACCOUNT_NAME")
   account_password = env("ZSTACK_ACCOUNT_PASSWORD")
@@ -134,7 +134,7 @@ source "zstack" "from_snapshot" {
 }
 
 build {
-  sources = ["source.zstack.from_snapshot"]
+  sources = ["source.zstack-snapshot.from_snapshot"]
 }
 ```
 
