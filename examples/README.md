@@ -9,6 +9,7 @@ Choose one template for your build. The top-level HCL files are independent exam
 | [uuid.pkr.hcl](uuid.pkr.hcl) | Select resources by UUID |
 | [from_snapshot.pkr.hcl](from_snapshot.pkr.hcl) | Use `zstack-snapshot` to convert a root-volume snapshot (requires v1.2.1 or later) |
 | [advanced.pkr.hcl](advanced.pkr.hcl) | Multiple networks, placement, timeouts and cleanup settings |
+| [helix-kylin.pkr.hcl](helix-kylin.pkr.hcl) | Opt-in Helix/Kylin DHCP network generalization; see [scope and lifecycle](network-generalization/README.md) |
 | [iso/](iso/README.md) | Install Debian, Ubuntu, Rocky ARM or Windows from ISO using unattended answer files |
 | [load_images.sh](load_images.sh) | Optional shell provisioner for checking the guest environment |
 
