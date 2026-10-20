@@ -27,6 +27,6 @@ packer build examples/basic.pkr.hcl
 
 ## Advanced lifecycle and placement
 
-`advanced.pkr.hcl` demonstrates multiple networks, temporary-key cleanup, bounded API/cleanup timeouts and retention settings. These new fields require a plugin built from the current source; older published tags may reject them. Build with `make build` and install the local plugin using the mechanism supported by your Packer version (`packer plugins install --path` requires a recent Packer).
+`advanced.pkr.hcl` demonstrates multiple networks, temporary-key cleanup, bounded API/cleanup timeouts and retention settings. These fields require plugin v1.2.0 or later; run `packer init examples/advanced.pkr.hcl` to install a compatible release.
 
 Load credentials from an ignored local `.env` before running Packer. Supply `image_uuid`, `network_uuids`, and `backup_storage_uuid` as variables. Set `ssh_username` to the source image's cloud-init user. The output contains only the root disk; any data disks created through `data_disk_offering_uuids` are temporary and are deleted during cleanup.

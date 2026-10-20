@@ -1,4 +1,4 @@
-# Requires a locally installed build of this branch or a release containing zstack-iso.
+# Requires plugin v1.2.0 or later with zstack-iso support.
 # Install Debian from a standard BIOS installer ISO. Verify its SHA256 against
 # the publisher's checksums before making it available to ZStack.
 packer {
